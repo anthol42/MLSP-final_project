@@ -1,0 +1,9 @@
+pandas
+numpy
+matplotlib
+mplfinance
+torch
+torchaudio
+scikit-learn
+backtest-pro
+
