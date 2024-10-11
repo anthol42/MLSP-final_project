@@ -37,13 +37,13 @@ def melodie(ts, window_size: int):
         window = ts[i:window_size + i + 1] / ts[i]
         note = window2note1(window, 0.5)
         # note = torch.ones(len(ts))
-        fft = torch.fft.rfft(note).real
+        # fft = torch.fft.rfft(note).real
         # Low pass filter
         # fft[1200:] = 0
         # fft[1080:1120] = 0
         # fft[800:900] = 0
-        fft[fft < 50] = 0
-        note = torch.fft.irfft(fft)
+        # fft[fft < 50] = 0
+        # note = torch.fft.irfft(fft)
         notes.append(note)
     return np.concatenate(notes)
 def make_dataset(chart: pd.DataFrame, window_size: int = 100, n_notes: int = 50):
