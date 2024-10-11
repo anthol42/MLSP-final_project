@@ -79,23 +79,22 @@ class ImageDataset(Dataset):
         :param window_len: The length of the window
         :return: The index, the processed data
         """
-        offsets = [0]
+        offsets = [-1]
         out_data = []
         for name, chart in tqdm(data.items()):
             # TODO: Add the label algorithm and add a column to the chart tensor
-            offsets.append(len(chart) - window_len - 1)
+            offsets.append(len(chart) - window_len + 1)
             out_data.append(torch.from_numpy(chart.values))
-
-        return np.cumsum(offsets), out_data
+        offsets.append(offsets[-1] + 1)    # To avoid an overflow in the indexing algorithm where all offset are passed
+        offsets = np.cumsum(offsets)
+        # offsets[1:-1] += 1
+        return offsets, out_data
 
     def __getitem__(self, idx):
-        # TODO: Fix the index process
         # Get coordinates
-        chart_idx = np.argmin(idx >= self.offsets[1:]) if idx != self.offsets[-1] else len(self.offsets) - 1
-        i = idx - self.offsets[chart_idx]
-
+        chart_idx = np.argmin(idx > self.offsets[1:])
+        i = idx - self.offsets[chart_idx] - 1
         # Return the processed sample and the label
-        print(chart_idx, i)
         window = self.data[chart_idx][i:i + self.window_len]
         return self.process(window, self.p_quant)
 
@@ -107,23 +106,27 @@ class ImageDataset(Dataset):
         :param p_quant: The quantification of the price
         :return: The image, the label
         """
+        # print(window.shape)
+        assert len(window) == 256
         return gen_image(window.numpy(), p_quant), 0.    # TODO: Add the computed label
 
 
     def __len__(self):
-        return self.offsets[-1]
+        return self.offsets[-2] + 1   # Last one is just padding to avoid overflow in indexing algorithm
 
 
 if __name__ == "__main__":
     from backtest.data import FetchCharts, Cache
     from datetime import datetime
-    TICKERS = ['AAPL', 'NVDA', 'META']
+    TICKERS = ['AAPL', 'NVDA', 'META', "AMZN"]
     pipe = FetchCharts(TICKERS) | Cache()
     data = pipe.get(datetime(2000, 1, 1), datetime(2020, 1, 1))
     dataset = ImageDataset(data)
-    print(len(data["META"]))
+    print(len(data["AAPL"]), len(data["NVDA"]), len(data["META"]))
+    # print(dataset[11214])
+    print(len(dataset))
     for i, (image, label) in enumerate(tqdm(dataset)):
-        pass
-        # if i % 256 == 0:
-        #     plt.imshow(image)
-        #     plt.show()
+        # print(i)
+        if i % 256 == 0:
+            plt.imshow(image)
+            plt.show()
