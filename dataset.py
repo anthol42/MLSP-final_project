@@ -45,16 +45,16 @@ def gen_image(chart: np.ndarray, p_quant = 128) -> torch.Tensor:
     # Step 3: Make the spectrum
     quant_high = np.argmin((chart[:, 1] - prices[:, None]) ** 2, axis=0)
     quant_low = np.argmin((chart[:, 2] - prices[:, None]) ** 2, axis=0)
-    mask_up = np.log(1 + np.exp((quant_high[None, :] - np.arange(p_quant)[:, None]) / p_quant)) - np.log(2)
-    mask_up[mask_up < 0] = 0
-    mask_down = np.log(1 + np.exp((np.arange(p_quant)[:, None] - quant_high[None, :]) / p_quant)) - np.log(2)
+    mask_down = np.log(1 + np.exp((quant_low[None, :] - np.arange(p_quant)[:, None]) / p_quant)) - np.log(2)
     mask_down[mask_down < 0] = 0
+    mask_up = np.log(1 + np.exp((np.arange(p_quant)[:, None] - quant_high[None, :]) / p_quant)) - np.log(2)
+    mask_up[mask_up < 0] = 0
     mask = mask_up + mask_down
-    mask = mask / mask.max()
+    mask = mask / (mask.max(axis=0) + 1e-8)
 
     # Step 4: Get volume
     volume = np.tile(np.log(1 + chart[:, 4][None, :] / (np.max(chart[:, 4] + 1))), (p_quant, 1))
-    volume_image = plt.cm.seismic(volume)[:, : :, :3]
+    volume_image = plt.cm.coolwarm(volume)[:, : :, :3]
     volume_image = mask[:, :, None] * volume_image
 
     # Step 5: Combine the images and clamp 0-1
