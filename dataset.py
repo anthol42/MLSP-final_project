@@ -58,7 +58,7 @@ def gen_image(chart: np.ndarray, p_quant = 128) -> torch.Tensor:
     volume_image = mask[:, :, None] * volume_image
 
     # Step 5: Combine the images and clamp 0-1
-    image = np.clip(image + volume_image, 0, 1)
+    # image = np.clip(image + volume_image, 0, 1)
 
     # Flip vertically the image
     image = image[::-1, :, :].copy()
@@ -125,8 +125,13 @@ if __name__ == "__main__":
     print(len(data["AAPL"]), len(data["NVDA"]), len(data["META"]))
     # print(dataset[11214])
     print(len(dataset))
+    k = 0
     for i, (image, label) in enumerate(tqdm(dataset)):
         # print(i)
         if i % 256 == 0:
-            plt.imshow(image)
-            plt.show()
+            k+=1
+            if k == 3:
+                plt.imshow(image)
+                plt.tight_layout()
+                plt.axis("off")
+                plt.savefig("/Users/alavertu/Downloads/viz_repr_no_spectrum.png", dpi=400)
