@@ -54,7 +54,7 @@ def gen_image(chart: np.ndarray, p_quant = 128) -> torch.Tensor:
 
     # Step 4: Get volume
     volume = np.tile(np.log(1 + chart[:, 4][None, :] / (np.max(chart[:, 4] + 1))), (p_quant, 1))
-    volume_image = plt.cm.coolwarm(volume)[:, : :, :3]
+    volume_image = plt.cm.coolwarm(volume)[:, : :, :3]    # Or plasma
     volume_image = mask[:, :, None] * volume_image
 
     # Step 5: Combine the images and clamp 0-1
