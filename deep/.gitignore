@@ -169,10 +169,6 @@ logs/
 
 results/
 
-weights/
-
-runs/
-
-._*
+tmp*
 
 tmp.py

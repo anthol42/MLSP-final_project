@@ -2,11 +2,16 @@ from torch import nn
 import torch
 import torch.nn.functional as F
 from torch.utils.data import Dataset
-from typing import Tuple, Dict, List
+from typing import Tuple, Dict, List, Optional
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
 import matplotlib.pyplot as plt
+from torch.utils.data import DataLoader
+from datetime import datetime, timedelta
+from backtest.data import DataPipe
+
+WINDOW_SIZE = 14
 
 def gen_image(chart: np.ndarray, p_quant = 128, mode='substract', decay: float = 20.) -> torch.Tensor:
     """
@@ -82,8 +87,45 @@ def gen_image(chart: np.ndarray, p_quant = 128, mode='substract', decay: float =
     image = image[::-1, :, :].copy()
     return torch.from_numpy(image)
 
+def annotate_tickers(chart: np.ndarray, WINDOW_SIZE = 14):
+    # Get close prices
+    close_price = pd.Series(chart[:, 3])
+
+    # Generate all windows
+    moving_average = close_price.rolling(WINDOW_SIZE).mean()
+    close_price = close_price[len(close_price) - len(moving_average):]
+
+    # Split the data point on which are over or under the mean curve
+    over = close_price >= moving_average
+
+    t = np.array(over, dtype=np.int8)
+    i = 0
+    inflection_pts = []
+
+    while(i < len(t)):
+        val = t[i]
+
+        if(val == 0):
+            idx = np.argmax(t[i:]) + i if np.all(~t[i:]) else len(t)
+            if(i != idx):
+                arg = close_price[i:idx].argmin() + i + 1
+                t[i:arg] = 0
+                t[arg:idx] = 1
+
+        else: # Value = 1
+            idx = np.argmin(t[i:]) + i if not np.all(t[i:]) else len(t)
+            arg = close_price[i:idx].argmax() + i + 1
+            t[i:arg] = 1
+            t[arg:idx] = 0
+
+        inflection_pts.append(arg)
+        if i != idx: i = idx
+        else: break
+
+    return t
 
 class ImageDataset(Dataset):
+    LABELS = ["DOWN", "UP", "NEUTRAL"]
     def __init__(self, data: Dict[str, pd.DataFrame], p_quant: int = 128, window_len: int = 256, mode: str = 'subtract'):
         """
         :param data: The data fetched from the data pipeline
@@ -107,9 +149,8 @@ class ImageDataset(Dataset):
         offsets = [-1]
         out_data = []
         for name, chart in tqdm(data.items()):
-            # TODO: Add the label algorithm and add a column to the chart tensor
             offsets.append(len(chart) - window_len + 1)
-            out_data.append(torch.from_numpy(chart.values))
+            out_data.append((torch.from_numpy(chart.values), annotate_tickers(chart.values, WINDOW_SIZE)))
         offsets.append(offsets[-1] + 1)    # To avoid an overflow in the indexing algorithm where all offset are passed
         offsets = np.cumsum(offsets)
         return offsets, out_data
@@ -119,30 +160,67 @@ class ImageDataset(Dataset):
         chart_idx = np.argmin(idx > self.offsets[1:])
         i = idx - self.offsets[chart_idx] - 1
         # Return the processed sample and the label
-        window = self.data[chart_idx][i:i + self.window_len]
-        return self.process(window, self.p_quant, self.mode)
+        chart, labels = self.data[chart_idx]
+        window = chart[i:i + self.window_len]
+        return self.process(window, self.p_quant, self.mode), torch.tensor(labels[i + self.window_len - 1]).long()
 
     @staticmethod
-    def process(window: torch.Tensor, p_quant: int, mode: str) -> Tuple[torch.Tensor, torch.Tensor]:
+    def process(window: torch.Tensor, p_quant: int, mode: str) -> torch.Tensor:
         """
         Process the window into an image and a label
         :param window: The window to process
         :param p_quant: The quantification of the price
         :return: The image, the label
         """
-        assert len(window) == 256
-        return gen_image(window.numpy(), p_quant, mode=mode), 0.    # TODO: Add the computed label
+        image = gen_image(window.numpy(), p_quant, mode=mode)
+        image = image.permute(2, 0, 1)
 
+        # Interpolate 2x
+        image = F.interpolate(image.unsqueeze(0), scale_factor=2, mode='nearest').squeeze(0)
+        return image.float()
 
     def __len__(self):
         return self.offsets[-2] + 1   # Last one is just padding to avoid overflow in indexing algorithm
 
+def split_data(data: Dict[str, pd.DataFrame], start: datetime, end: datetime) -> Dict[str, pd.DataFrame]:
+    """
+    Extract the date range from the data; range: [start,end]
+    :param data: The data to split
+    :param start: The start of split to extract (Included)
+    :param end: The end of the split to extract (Included)
+    :return: The cropped data
+    """
+    out = {}
+    for name, chart in data.items():
+        out[name] = chart.loc[start.date():end.date()]
+    return out
+def make_dataloader(config, pipe: DataPipe, start: datetime, train_end: datetime, val_end: datetime, test_end: datetime):
+    # Step 1: Fetch the data
+    data = pipe.get(start, test_end)
+
+    # Step 2: Split the data
+    train_data = split_data(data, start, train_end)
+    val_data = split_data(data, train_end + timedelta(days=1), val_end)
+    test_data = split_data(data, val_end + timedelta(days=1), test_end)
+
+    # Step 3: Make the datasets
+    train_ds = ImageDataset(train_data, mode=config["data"]["mode"], p_quant=config["data"]["p_quant"], window_len=config["data"]["window_len"])
+    val_ds = ImageDataset(val_data, mode=config["data"]["mode"], p_quant=config["data"]["p_quant"], window_len=config["data"]["window_len"])
+    test_ds = ImageDataset(test_data, mode=config["data"]["mode"], p_quant=config["data"]["p_quant"], window_len=config["data"]["window_len"])
+
+    # Step 4: Initialize the dataloaders
+    train_dataloader = DataLoader(train_ds, batch_size=config["data"]["batch_size"], shuffle=config["data"]["shuffle"])
+    val_dataloader = DataLoader(val_ds, batch_size=config["data"]["batch_size"], shuffle=False)
+    test_dataloader = DataLoader(test_ds, batch_size=config["data"]["batch_size"], shuffle=False)
+
+    return train_dataloader, val_dataloader, test_dataloader
 
 if __name__ == "__main__":
     from backtest.data import FetchCharts, Cache
     from datetime import datetime
     TICKERS = ['AAPL', 'NVDA', 'META', "AMZN"]
     pipe = FetchCharts(TICKERS) | Cache()
+    data = pipe.get(datetime(2000, 1, 1), datetime(2020, 1, 1))
     data = pipe.get(datetime(2000, 1, 1), datetime(2020, 1, 1))
     dataset = ImageDataset(data, mode='add')
     print(len(data["AAPL"]), len(data["NVDA"]), len(data["META"]))

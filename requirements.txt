@@ -3,7 +3,11 @@ numpy<2.0.0
 matplotlib
 mplfinance
 torch
-torchaudio
+torchvision
 scikit-learn
 backtest-pro
-
+Pillow
+PyYAML
+torchinfo
+tensorboard
+torchmetrics
