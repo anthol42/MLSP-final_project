@@ -8,11 +8,13 @@ import pandas as pd
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 
-def gen_image(chart: np.ndarray, p_quant = 128) -> torch.Tensor:
+def gen_image(chart: np.ndarray, p_quant = 128, mode='substract', decay: float = 20.) -> torch.Tensor:
     """
     Generate an image from a chart
     :param chart: A tensor in the format [Open, High, Low, Close, Volume, LABEL]
     :param p_quant: The quantification size of the price
+    :param mode: The mode of the spectrum (add or subtract)
+    :param decay: The decay of the spectrum (Only used when mode = subtract)
     :return: The image
     """
     # Step 1: Quantify prices
@@ -45,10 +47,26 @@ def gen_image(chart: np.ndarray, p_quant = 128) -> torch.Tensor:
     # Step 3: Make the spectrum
     quant_high = np.argmin((chart[:, 1] - prices[:, None]) ** 2, axis=0)
     quant_low = np.argmin((chart[:, 2] - prices[:, None]) ** 2, axis=0)
-    mask_down = np.log(1 + np.exp((quant_low[None, :] - np.arange(p_quant)[:, None]) / p_quant)) - np.log(2)
-    mask_down[mask_down < 0] = 0
-    mask_up = np.log(1 + np.exp((np.arange(p_quant)[:, None] - quant_high[None, :]) / p_quant)) - np.log(2)
-    mask_up[mask_up < 0] = 0
+    if mode == 'subtract':
+        mask_down = np.log(1 + np.exp((quant_low[None, :] - np.arange(p_quant)[:, None]) / p_quant)) - np.log(2)
+        mask_down[mask_down < 0] = 0
+        mask_up = np.log(1 + np.exp((np.arange(p_quant)[:, None] - quant_high[None, :]) / p_quant)) - np.log(2)
+        mask_up[mask_up < 0] = 0
+    else:
+        price_max = np.maximum(chart[:, 0], chart[:, 3])   # Max between open and close
+        price_min = np.minimum(chart[:, 0], chart[:, 3])   # Min between open and close
+        quant_max = np.argmin((price_max - prices[:, None]) ** 2, axis=0) # Index of top candle
+        quant_min = np.argmin((price_min - prices[:, None]) ** 2, axis=0) # Index of bottom candle
+        mask_up = np.log(1 + np.exp(-decay * np.abs(np.arange(p_quant)[:, None] - quant_max -1) / p_quant)) - np.log(2)
+        mask_up += -mask_up.min()
+        mask_up /= mask_up.max()
+        mask_up[np.arange(p_quant)[:, None] <= quant_max] = 0.
+        mask_up[np.arange(p_quant)[:, None] > quant_high] = 0.
+        mask_down = np.log(1 + np.exp(-decay * np.abs(quant_min - np.arange(p_quant)[:, None] - 1) / p_quant)) - np.log(2)
+        mask_down += -mask_down.min()
+        mask_down /= mask_down.max()
+        mask_down[np.arange(p_quant)[:, None] >= quant_min] = 0.
+        mask_down[np.arange(p_quant)[:, None] < quant_low] = 0.
     mask = mask_up + mask_down
     mask = mask / (mask.max(axis=0) + 1e-8)
 
@@ -58,7 +76,7 @@ def gen_image(chart: np.ndarray, p_quant = 128) -> torch.Tensor:
     volume_image = mask[:, :, None] * volume_image
 
     # Step 5: Combine the images and clamp 0-1
-    # image = np.clip(image + volume_image, 0, 1)
+    image = np.clip(image + volume_image, 0, 1)
 
     # Flip vertically the image
     image = image[::-1, :, :].copy()
@@ -66,9 +84,16 @@ def gen_image(chart: np.ndarray, p_quant = 128) -> torch.Tensor:
 
 
 class ImageDataset(Dataset):
-    def __init__(self, data: Dict[str, pd.DataFrame], p_quant: int = 128, window_len: int = 256):
+    def __init__(self, data: Dict[str, pd.DataFrame], p_quant: int = 128, window_len: int = 256, mode: str = 'subtract'):
+        """
+        :param data: The data fetched from the data pipeline
+        :param p_quant: The precision of the quantification (Number of bins or height of the image)
+        :param window_len: The length of the window that the image will represent (Width of the image)
+        :param mode: The mode: add or subtract
+        """
         self.p_quant = p_quant
         self.window_len = window_len
+        self.mode = mode
         self.offsets, self.data = self.process_data(data, window_len)
 
     @staticmethod
@@ -87,7 +112,6 @@ class ImageDataset(Dataset):
             out_data.append(torch.from_numpy(chart.values))
         offsets.append(offsets[-1] + 1)    # To avoid an overflow in the indexing algorithm where all offset are passed
         offsets = np.cumsum(offsets)
-        # offsets[1:-1] += 1
         return offsets, out_data
 
     def __getitem__(self, idx):
@@ -96,19 +120,18 @@ class ImageDataset(Dataset):
         i = idx - self.offsets[chart_idx] - 1
         # Return the processed sample and the label
         window = self.data[chart_idx][i:i + self.window_len]
-        return self.process(window, self.p_quant)
+        return self.process(window, self.p_quant, self.mode)
 
     @staticmethod
-    def process(window: torch.Tensor, p_quant: int):
+    def process(window: torch.Tensor, p_quant: int, mode: str) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Process the window into an image and a label
         :param window: The window to process
         :param p_quant: The quantification of the price
         :return: The image, the label
         """
-        # print(window.shape)
         assert len(window) == 256
-        return gen_image(window.numpy(), p_quant), 0.    # TODO: Add the computed label
+        return gen_image(window.numpy(), p_quant, mode=mode), 0.    # TODO: Add the computed label
 
 
     def __len__(self):
@@ -121,17 +144,15 @@ if __name__ == "__main__":
     TICKERS = ['AAPL', 'NVDA', 'META', "AMZN"]
     pipe = FetchCharts(TICKERS) | Cache()
     data = pipe.get(datetime(2000, 1, 1), datetime(2020, 1, 1))
-    dataset = ImageDataset(data)
+    dataset = ImageDataset(data, mode='add')
     print(len(data["AAPL"]), len(data["NVDA"]), len(data["META"]))
     # print(dataset[11214])
     print(len(dataset))
     k = 0
     for i, (image, label) in enumerate(tqdm(dataset)):
-        # print(i)
         if i % 256 == 0:
-            k+=1
-            if k == 3:
-                plt.imshow(image)
-                plt.tight_layout()
-                plt.axis("off")
-                plt.savefig("/Users/alavertu/Downloads/viz_repr_no_spectrum.png", dpi=400)
+            plt.imshow(image)
+            plt.tight_layout()
+            plt.axis("off")
+            plt.show()
+            # plt.savefig("/Users/alavertu/Downloads/viz_repr_no_spectrum.png", dpi=400)
