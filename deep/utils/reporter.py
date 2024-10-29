@@ -16,10 +16,20 @@ class Reporter(SummaryWriter):
 
     @property
     def keys(self):
-        return self._load_events().Tags()["scalars"]
+        events = self._load_events()
+        events.Reload()
+        return events.Tags()["scalars"]
 
     def __getitem__(self, item):
-        return pd.DataFrame(self._load_events().Scalars(item))
+        events = self._load_events()
+        events.Reload()
+        try:
+            return pd.DataFrame(events.Scalars(item))
+        except Exception as e:
+            print(self.log_dir)
+            print(self.keys)
+            print(pd.DataFrame(events.Scalars(item)))
+            raise e
 
     def _load_events(self):
         return event_accumulator.EventAccumulator(

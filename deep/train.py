@@ -45,12 +45,12 @@ def train_one_epoch(dataloader, model, optimizer, criterion, epoch, device, feed
         metr["loss"] = loss.item()
 
         # Report metrics
-        State.writer.add_scalar('Step_Loss', metr["loss"], State.global_step)
+        State.writer.add_scalar('Step/Loss', metr["loss"], State.global_step)
         lossCounter(metr["loss"])
         for metric_name, value in metr.items():
             if metric_name in metrics_counter:
                 metrics_counter[metric_name](value)
-                State.writer.add_scalar(f'Step_{metric_name}', value, State.global_step)
+                State.writer.add_scalar(f'Step/{metric_name}', value, State.global_step)
 
         #Display metrics
         feedback(
@@ -60,8 +60,8 @@ def train_one_epoch(dataloader, model, optimizer, criterion, epoch, device, feed
 
     # Report epochs metrics
     for metric_name, counter in metrics_counter.items():
-        State.writer.add_scalar(f'{metric_name}/Train', counter.values().mean(), epoch)
-    State.writer.add_scalar(f'Loss/Train', lossCounter.values().mean(), epoch)
+        State.writer.add_scalar(f'Train/{metric_name}', counter.values().mean(), epoch)
+    State.writer.add_scalar(f'Train/Loss', lossCounter.values().mean(), epoch)
 
 @torch.inference_mode()
 def validation_step(model, dataloader, criterion, epoch, device, feedback, metrics: dict = None):
@@ -106,8 +106,8 @@ def validation_step(model, dataloader, criterion, epoch, device, feedback, metri
 
     # Report epochs metrics
     for metric_name, counter in metrics_counter.items():
-        State.writer.add_scalar(f'{metric_name}/Valid', counter.values().mean(), epoch)
-    State.writer.add_scalar(f'Loss/Valid', lossCounter.values().mean(), epoch)
+        State.writer.add_scalar(f'Valid/{metric_name}', counter.values().mean(), epoch)
+    State.writer.add_scalar(f'Valid/Loss', lossCounter.values().mean(), epoch)
 
 def train(model, optimizer, train_loader, val_loader, criterion, num_epochs, device, config, scheduler=None, metrics: dict = None):
     State.global_step = 0
@@ -117,7 +117,7 @@ def train(model, optimizer, train_loader, val_loader, criterion, num_epochs, dev
         best_metric_val=float('-inf'), evaluation_method='MAX')
     if str(device) == "cuda":
         # For mixed precision training
-        scaler = torch.cuda.amp.GradScaler()
+        scaler = torch.amp.GradScaler()
     else:
         # We cannot do mixed precision on cpu or mps
         scaler = None
@@ -137,7 +137,7 @@ def train(model, optimizer, train_loader, val_loader, criterion, num_epochs, dev
         )
 
         # Checkpoint
-        val_precision = State.writer["precision/Valid"]["value"].values
+        val_precision = State.writer["Valid/precision"]["value"].values
         save_best_model(val_precision[epoch], epoch, model, optimizer, criterion)
 
 @torch.inference_mode()
@@ -166,6 +166,12 @@ def evaluate(model, dataloader, criterion, device, metrics: dict = None):
             for metric_name, metric_fn in metrics.items():
                 metr[metric_name] = metric_fn(targets, pred)
         metr["loss"] = loss.item()
+
+        # Report metrics
+        lossCounter(metr["loss"])
+        for metric_name, value in metr.items():
+            if metric_name in metrics_counter:
+                metrics_counter[metric_name](value)
 
         # Display metrics
         feedback(

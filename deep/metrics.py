@@ -11,12 +11,12 @@ def custom_precision(targets, pred):
     # Down
     btargets = targets == 0
     bhard_pred = hard_pred == 0
-    down_prec = precision_score(btargets, bhard_pred)
+    down_prec = precision_score(btargets, bhard_pred, zero_division=0)
 
     # UP
     btargets = targets == 1
     bhard_pred = hard_pred == 1
-    up_prec = precision_score(btargets, bhard_pred)
+    up_prec = precision_score(btargets, bhard_pred, zero_division=0)
 
     prec = (up_prec + down_prec) / 2
     return prec

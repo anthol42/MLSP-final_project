@@ -1,3 +1,5 @@
+import os.path
+
 import torch
 import torchvision.models
 from torch import nn
@@ -51,6 +53,9 @@ def experiment1(args, kwargs):
     config["model"]["model_dir"] = f'{config["model"]["model_dir"]}/{run_id}'
 
     comment = '' if hyper.get("comment") is None else hyper.get("comment")
+    if os.path.exists(f'runs/{run_id}'):
+        print(f"Clearing tensorboard logs for id: {run_id}")
+        shutil.rmtree(f'runs/{run_id}')
     State.writer = Reporter(log_dir=f'runs/{run_id}', comment=comment)
 
     # Loading the data
@@ -58,7 +63,7 @@ def experiment1(args, kwargs):
                                                             start=datetime(2000, 1, 1),
                                                             train_end=datetime(2016, 12, 31),
                                                             val_end=datetime(2019, 12, 13),
-                                                            test_end=datetime(2024, 1, 1))
+                                                            test_end=datetime(2024, 1, 1), fract=args.fract)
     print("Data loaded successfully!")
 
     # Loading the model

@@ -6,6 +6,7 @@ config_format = {
         "p_quant": int,
         "window_len": int,
         "num_workers": int,
+        "random_seed": int
     },
     "training":{
         "num_epochs": int,
@@ -16,12 +17,6 @@ config_format = {
     "model":{
         "model_dir": "opath",
         "model_name": "opath",
-        "dropout2d": float,
         "dropout": float
-    },
-    "scheduler":{
-        "n_iter_restart": int,
-        "factor_increase": int,
-        "min_lr": float
     }
 }

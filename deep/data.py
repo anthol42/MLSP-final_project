@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 from torch.utils.data import DataLoader
 from datetime import datetime, timedelta
 from backtest.data import DataPipe
+import random
 
 WINDOW_SIZE = 14
 
@@ -126,17 +127,42 @@ def annotate_tickers(chart: np.ndarray, WINDOW_SIZE = 14):
 
 class ImageDataset(Dataset):
     LABELS = ["DOWN", "UP", "NEUTRAL"]
-    def __init__(self, data: Dict[str, pd.DataFrame], p_quant: int = 128, window_len: int = 256, mode: str = 'subtract'):
+    def __init__(self, data: Dict[str, pd.DataFrame], p_quant: int = 128, window_len: int = 256, mode: str = 'subtract', fract: float = 1.,
+                 random_seed: Optional[int] = None):
         """
         :param data: The data fetched from the data pipeline
         :param p_quant: The precision of the quantification (Number of bins or height of the image)
         :param window_len: The length of the window that the image will represent (Width of the image)
         :param mode: The mode: add or subtract
+        :param fract: The fraction of the dataset to use.
+        :param random_seed: The random seed to use in the dataset. NOTE: It will set the random seed globally in
+        python's random module
         """
         self.p_quant = p_quant
         self.window_len = window_len
         self.mode = mode
+        if fract < 1.:
+            data = self.sample_data(data, fract, seed=random_seed)
         self.offsets, self.data = self.process_data(data, window_len)
+
+    @staticmethod
+    def sample_data(data: Dict[str, pd.DataFrame], frac, seed: Optional[int] = None) -> Dict[str, pd.DataFrame]:
+        """
+        Sample a fraction of the given data. Sample across stocks (Ex: keep 42 stocks out of 400)
+        :param data: The data to be sampled from
+        :param frac: The fraction of the original data to keep
+        :param seed: The random seed to use. If None, no random seed is set.  NOTE: Setting the random seed here will
+        set the random seed globally
+        :return: The sampled data
+        """
+        if seed is not None:
+            random.seed(seed)
+        keys = list(data.keys())
+        # Shuffle
+        random.shuffle(keys)
+        threshold = int(frac * len(data))
+        return {ticker: data[ticker] for ticker in keys[:threshold]}
+
 
     @staticmethod
     def process_data(data: Dict[str, pd.DataFrame], window_len) -> Tuple[np.ndarray, List[torch.Tensor]]:
@@ -194,7 +220,7 @@ def split_data(data: Dict[str, pd.DataFrame], start: datetime, end: datetime) ->
     for name, chart in data.items():
         out[name] = chart.loc[start.date():end.date()]
     return out
-def make_dataloader(config, pipe: DataPipe, start: datetime, train_end: datetime, val_end: datetime, test_end: datetime):
+def make_dataloader(config, pipe: DataPipe, start: datetime, train_end: datetime, val_end: datetime, test_end: datetime, fract: float = 1.):
     # Step 1: Fetch the data
     data = pipe.get(start, test_end)
 
@@ -204,14 +230,23 @@ def make_dataloader(config, pipe: DataPipe, start: datetime, train_end: datetime
     test_data = split_data(data, val_end + timedelta(days=1), test_end)
 
     # Step 3: Make the datasets
-    train_ds = ImageDataset(train_data, mode=config["data"]["mode"], p_quant=config["data"]["p_quant"], window_len=config["data"]["window_len"])
-    val_ds = ImageDataset(val_data, mode=config["data"]["mode"], p_quant=config["data"]["p_quant"], window_len=config["data"]["window_len"])
-    test_ds = ImageDataset(test_data, mode=config["data"]["mode"], p_quant=config["data"]["p_quant"], window_len=config["data"]["window_len"])
+    train_ds = ImageDataset(train_data, mode=config["data"]["mode"], p_quant=config["data"]["p_quant"],
+                            window_len=config["data"]["window_len"], fract=fract,
+                            random_seed=config["data"]["random_seed"])
+    val_ds = ImageDataset(val_data, mode=config["data"]["mode"], p_quant=config["data"]["p_quant"],
+                          window_len=config["data"]["window_len"], fract=fract,
+                            random_seed=config["data"]["random_seed"])
+    test_ds = ImageDataset(test_data, mode=config["data"]["mode"], p_quant=config["data"]["p_quant"],
+                           window_len=config["data"]["window_len"], fract=fract,
+                            random_seed=config["data"]["random_seed"])
 
     # Step 4: Initialize the dataloaders
-    train_dataloader = DataLoader(train_ds, batch_size=config["data"]["batch_size"], shuffle=config["data"]["shuffle"])
-    val_dataloader = DataLoader(val_ds, batch_size=config["data"]["batch_size"], shuffle=False)
-    test_dataloader = DataLoader(test_ds, batch_size=config["data"]["batch_size"], shuffle=False)
+    train_dataloader = DataLoader(train_ds, batch_size=config["data"]["batch_size"], shuffle=config["data"]["shuffle"],
+                                  num_workers=config["data"]["num_workers"], persistent_workers=config["data"]["num_workers"] > 0)
+    val_dataloader = DataLoader(val_ds, batch_size=config["data"]["batch_size"], shuffle=False,
+                                  num_workers=config["data"]["num_workers"], persistent_workers=config["data"]["num_workers"] > 0)
+    test_dataloader = DataLoader(test_ds, batch_size=config["data"]["batch_size"], shuffle=False,
+                                  num_workers=config["data"]["num_workers"], persistent_workers=config["data"]["num_workers"] > 0)
 
     return train_dataloader, val_dataloader, test_dataloader
 
