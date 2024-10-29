@@ -1,5 +1,4 @@
 import os.path
-
 import torch
 import torchvision.models
 from torch import nn
@@ -14,7 +13,7 @@ from pipes import Finviz, RmTz
 from torchinfo import summary
 from datetime import datetime
 from metrics import custom_precision, accuracy
-
+import models
 # To verify if the config has the good format
 from configs.formats import config_format
 
@@ -67,14 +66,9 @@ def experiment1(args, kwargs):
     print("Data loaded successfully!")
 
     # Loading the model
-    model = torchvision.models.efficientnet_v2_s(weights=torchvision.models.EfficientNet_V2_S_Weights.IMAGENET1K_V1)
-    out_feat = model.classifier[-1].in_features
-    model.classifier = nn.Sequential(
-            nn.Dropout(p=config["model"]["dropout"], inplace=True),
-            nn.Linear(out_feat, 3),
-        )
+    model = models.from_name(config)
     model = model.to(device)
-    summary(model, input_size=(config["data"]["batch_size"], 3, config["data"]["p_quant"], config["data"]["window_len"]), device=device)
+    summary(model, input_size=(config["data"]["batch_size"], 3, 2 * config["data"]["p_quant"], 2 * config["data"]["window_len"]), device=device)
     print("Model loaded successfully!")
 
     # Loading optimizer, loss and scheduler
@@ -109,7 +103,7 @@ def experiment1(args, kwargs):
         "test_results": results
     }
     torch.save(
-        save_dict, f"{config['model']['model_dir']}/final_{config['model']['model_name']}.pth"
+        save_dict, f"{config['model']['model_dir']}/final_{config['model']['name']}.pth"
     )
 
     # Copy config file to model dir

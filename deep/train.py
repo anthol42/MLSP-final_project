@@ -113,7 +113,7 @@ def train(model, optimizer, train_loader, val_loader, criterion, num_epochs, dev
     State.global_step = 0
     # Checkpoints
     save_best_model = utils.SaveBestModel(
-        config["model"]["model_dir"], metric_name="validation precision", model_name=config["model"]["model_name"],
+        config["model"]["model_dir"], metric_name="validation precision", model_name=config["model"]["name"],
         best_metric_val=float('-inf'), evaluation_method='MAX')
     if str(device) == "cuda":
         # For mixed precision training
