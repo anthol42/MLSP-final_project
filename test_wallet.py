@@ -94,17 +94,20 @@ plt.xlim([0, np.max(transaction['Holding_time'].dt.days) + 1])
 plt.title('Histogramme des durées de maintien d\'une action ')
 
 # Add  quantile axis & annotation
-q = [1, 7, 14, 26]
-y = [20_000, 18_500, 17_000, 15_500]
+q = [1, 7, 14, 26] # Quantile values
+p = [10, 50,75, 90] # Percentile values
+y = [20_000, 18_500, 17_000, 15_500] # Y values for plotting
+
 bbox = dict(boxstyle="round", edgecolor="black", facecolor="none")
 arrowprops = dict(arrowstyle="->", color="black")
 
-for i, j in zip(q, y):
-    plt.axvline(x=i, color='black')
+for i, j, k in zip(q, y, p):
+    plt.axvline(x=i, color='gray', linestyle="dotted", lw=1, zorder=0)
     plt.annotate(
-        text=('Q10: ' + str(i) + ' jour'), xy=(i, j), xytext=(1 * 72, 0),
+        text=('Q'+str(k)+': '+str(i)+' jour'), xy=(i, j), xytext=(1 * 72, 0),
         textcoords='offset points', bbox=bbox, arrowprops=arrowprops
     )
+
 # Show plot
 plt.show()
 
