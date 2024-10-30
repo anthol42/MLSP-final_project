@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 from annotate_stock import annotate_tickers
 from backtest.data import FetchCharts, Cache, JSONCache, FilterNoneCharts, CausalImpute
 from datetime import datetime
-from pipes.finviz import Finviz
+from deep.pipes.finviz import Finviz
 from tqdm import tqdm
 
 # Fetch S&P500 stock data
@@ -86,7 +86,32 @@ money_ticker = pd.DataFrame({
     'Price': prices
 })
 
+# Plot the bins of Holding_time distribution
 bins = int(math.sqrt(len(transaction['Holding_time'])))
 hist_data = transaction['Holding_time'].dt.days
 plt.hist(hist_data, bins=bins)
+plt.xlim([0, np.max(transaction['Holding_time'].dt.days) + 1])
+plt.title('Histogramme des durées de maintien d\'une action ')
+
+# Add  quantile axis & annotation
+q = [1, 7, 14, 26]
+y = [20_000, 18_500, 17_000, 15_500]
+bbox = dict(boxstyle="round", edgecolor="black", facecolor="none")
+arrowprops = dict(arrowstyle="->", color="black")
+
+for i, j in zip(q, y):
+    plt.axvline(x=i, color='black')
+    plt.annotate(
+        text=('Q10: ' + str(i) + ' jour'), xy=(i, j), xytext=(1 * 72, 0),
+        textcoords='offset points', bbox=bbox, arrowprops=arrowprops
+    )
+# Show plot
 plt.show()
+
+# Get percentile of distribution
+# quantile = [5.0, 10.0, 25.0, 50.0, 75.0, 90.0, 95.0]
+# percentile = np.percentile(a=holding_time, q=quantile)
+#
+# for i in range(len(quantile)):
+#     print(f'quantile:{quantile[i]} -> {percentile[i]}')
+
