@@ -8,27 +8,27 @@ from scipy.signal import find_peaks
 pd.set_option('display.max_rows', 200)
 
 
-def add_neutral(df, pct : float):
+def add_neutral(df, x : int):
     """
     Ajouter l'annotation "Neutral" au jeu de données.
     :param df: Prix de fermeture et annotation préliminaire des données.
     :param pct: Pourcentage de variation en dessous duquel on considère neutre.
     :return: Jeu de données ayant les annotations mise à jour.
     """
-    chunk_size = 4
+    count = 1
+    idx = []
 
-    for i in range(df.shape[0] - chunk_size):
-        # Extract a chunk of 4 rows
-        chunk = df.iloc[i:i + chunk_size]
+    for i in range(1, df.shape[0] - 1):
 
-        # Calculate price variations for consecutive rows in the chunk
-        price_diffs = chunk['Close'].pct_change().abs().iloc[1:] > pct
+        if df.iloc[i]['Anno'] == df.iloc[i + 1]['Anno']:
+            count += 1
 
-        # Apply 'NEUTRAL' if both conditions are met
-        if price_diffs.all():
-            df.loc[chunk.index[0], 'Anno'] = 'NEUTRAL'
-            df.loc[chunk.index[1], 'Anno'] = 'NEUTRAL'
+        else:
+            if count <= x :
+                idx.extend([j for j in range(i - count + 1, i + 1)])
+            count = 1
 
+    df.iloc[idx, df.columns.get_loc('Anno')] = 'NEUTRAL'
     return df
 
 def annotate_tickers(df):
@@ -81,8 +81,10 @@ def annotate_tickers(df):
 
     # Indiquer les noms pour faciliter la compréhension
     annotated_price['Anno'] = annotated_price['Anno'].replace({1: 'UP', 0: 'DOWN'})
+
     # Mise à jour des annotations
-    annotated_price = add_neutral(df=annotated_price, pct=0.02)
+    annotated_price = add_neutral(df=annotated_price, x=3)
+
     # Dictionnaire des informations pour les graphiques
     plt_curve = {'close_price': close_price, 'moving_average': moving_average}
 
@@ -97,7 +99,7 @@ if __name__ == '__main__':
     # with pd.option_context('display.max_rows', None, 'display.max_columns',
     #                        None):
     #     print(trend)
-    print(trend[trend['Anno'] == 'NEUTRAL'])
+    print(trend.loc[trend['Anno'] == 'NEUTRAL'])
     trend_up = plt_curve['close_price'].copy()
     trend_down = plt_curve['close_price'].copy()
     trend_neutral = plt_curve['close_price'].copy()
