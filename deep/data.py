@@ -11,6 +11,7 @@ from torch.utils.data import DataLoader
 from datetime import datetime, timedelta
 from backtest.data import DataPipe
 import random
+import numpy.typing as npt
 
 WINDOW_SIZE = 14
 
@@ -88,7 +89,25 @@ def gen_image(chart: np.ndarray, p_quant = 128, mode='substract', decay: float =
     image = image[::-1, :, :].copy()
     return torch.from_numpy(image)
 
+def add_neutral_v2(anot: npt.NDArray[bool], dur : int = 7):
+    # Compute the length of each consecutive sequence of True values
+    change_points = np.diff(anot.astype(int)).nonzero()[0] + 1
+    segments = np.split(anot, change_points) # Segmented array
+
+    # Calculate the lengths of each segment and repeat them to form the output array
+    durations = np.concatenate([np.full(len(segment), len(segment)) for segment in segments])
+
+    out = anot.astype(np.int32)
+    out[durations < dur] = 2
+    return out
+
 def annotate_tickers(chart: np.ndarray, WINDOW_SIZE = 14):
+    """
+    Annotate the chart based on the closing prices
+    :param chart: The chart as a numpy array
+    :param WINDOW_SIZE: The window size for the moving average
+    :return: The annotations
+    """
     # Get close prices
     close_price = pd.Series(chart[:, 3])
 
@@ -109,21 +128,24 @@ def annotate_tickers(chart: np.ndarray, WINDOW_SIZE = 14):
         if(val == 0):
             idx = np.argmax(t[i:]) + i if np.all(~t[i:]) else len(t)
             if(i != idx):
-                arg = close_price[i:idx].argmin() + i + 1
-                t[i:arg] = 0
-                t[arg:idx] = 1
+                arg = close_price.iloc[i:idx].argmin() + i + 1
+                t[i:arg - 1] = 0
+                t[arg - 1:idx] = 1
 
-        else: # Value = 1
+        else:
             idx = np.argmin(t[i:]) + i if not np.all(t[i:]) else len(t)
-            arg = close_price[i:idx].argmax() + i + 1
-            t[i:arg] = 1
-            t[arg:idx] = 0
+            arg = close_price.iloc[i:idx].argmax() + i + 1
+            t[i:arg - 1] = 1
+            t[arg - 1:idx] = 0
 
         inflection_pts.append(arg)
         if i != idx: i = idx
         else: break
 
-    return t
+    annotations = t.astype(bool)
+    # Mise à jour des annotations
+    annotations = add_neutral_v2(annotations, dur=7)
+    return annotations
 
 class ImageDataset(Dataset):
     LABELS = ["DOWN", "UP", "NEUTRAL"]
