@@ -20,9 +20,7 @@ out = {}
 for ticker, chart in tqdm(data.items(), desc="Computing performances"): # data.items(): #
     o, c, index = chart['Open'].values, chart['Close'].values, chart.index
     s = datetime.now()
-    label = annotate_tickers(chart)
-    # change = label[1:] != label[:-1] # Future, pass
-    # idx = np.arange(len(change))[change]
+    label = annotate_tickers(chart.values)
 
     state = label[0]
     buy_price = None

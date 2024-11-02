@@ -8,30 +8,6 @@ from scipy.signal import find_peaks
 
 pd.set_option('display.max_rows', 200)
 
-
-def add_neutral(df, pct : float):
-    """
-    Ajouter l'annotation "Neutral" au jeu de données.
-    :param df: Prix de fermeture et annotation préliminaire des données.
-    :param pct: Pourcentage de variation en dessous duquel on considère neutre.
-    :return: Jeu de données ayant les annotations mise à jour.
-    """
-    chunk_size = 4
-
-    for i in range(df.shape[0] - chunk_size):
-        # Extract a chunk of 4 rows
-        chunk = df.iloc[i:i + chunk_size]
-
-        # Calculate price variations for consecutive rows in the chunk
-        price_diffs = chunk['Close'].pct_change().abs().iloc[1:] > pct
-
-        # Apply 'NEUTRAL' if both conditions are met
-        if price_diffs.all():
-            df.loc[chunk.index[0], 'Anno'] = 'NEUTRAL'
-            df.loc[chunk.index[1], 'Anno'] = 'NEUTRAL'
-
-    return df
-
 def add_neutral_v2(anot: npt.NDArray[bool], dur : int = 7):
     # Compute the length of each consecutive sequence of True values
     change_points = np.diff(anot.astype(int)).nonzero()[0] + 1
@@ -44,21 +20,18 @@ def add_neutral_v2(anot: npt.NDArray[bool], dur : int = 7):
     out[durations < dur] = 2
     return out
 
-def annotate_tickers(df):
+def annotate_tickers(chart: np.ndarray, WINDOW_SIZE = 14):
     """
     Annoter les prix de fermeture
     :param df: jeu de données contenant les prix de fermeture et les dates
     :return: Jeu de données annoté et information pour les graphiques
     """
-    WINDOW_SIZE = 14
-
     # Get close prices
-    close_price = df['Close']
-    close_price.index = pd.to_datetime(close_price.index).date
+    close_price = pd.Series(chart[:, 3])
 
     # Generate all windows
     moving_average = close_price.rolling(WINDOW_SIZE).mean()
-    close_price = close_price[moving_average.index]
+    close_price = close_price[len(close_price) - len(moving_average):]
 
     # Split the data point on which are over or under the mean curve
     over = close_price >= moving_average
