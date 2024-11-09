@@ -1,15 +1,19 @@
-from backtest.data import JSONCache, FetchCharts, Cache, FilterNoneCharts, CausalImpute, ToTSData, PadNan, Process, PipeOutput
+import matplotlib.pyplot as plt
+from backtest.data import JSONCache, FetchCharts, Cache, FilterNoneCharts, CausalImpute, Process, PipeOutput
 from deep.pipes import Finviz, RmTz
 from datetime import datetime
-from backtest import Strategy, Backtest, RecordsBucket, TSData, Record
 import pandas as pd
-from typing import Optional, Dict, Callable, List
+from typing import Optional, Dict, Callable, List, Tuple
 import numpy as np
 import numpy.typing as npt
 from tqdm import tqdm
 import torch
-from deep.data import gen_image
+from deep.data import gen_image, split_data
 from torch.utils.data import Dataset, DataLoader
+from deep import models
+from evaluation.configFile import ConfigFile
+import h5py
+import torch.nn.functional as F
 
 N_STOCKS = 500
 @Process
@@ -18,14 +22,13 @@ def Sample(frm: datetime, to: datetime, *args, po: Optional[PipeOutput[Dict[str,
     np.random.shuffle(keys)
     return {k: po.value[k] for k in keys[:N_STOCKS]}
 
-def annotate(data: List[Dict[str, TSData]], fn: Callable[[npt.NDArray[np.float32]], npt.NDArray[np.int8]], batch_size=128,
+def annotate(data: List[Dict[str, pd.DataFrame]], fn: Callable[[npt.NDArray[np.float32]], npt.NDArray[np.int8]], batch_size=128,
               window_size: int = 128, mode: str = 'iterative', **kwargs):
     out = {}
-    for ticker, ts in tqdm(data[0].items(), desc="Annotating"):
-        chart = ts.data
-        tmp = _annotate(chart, fn, batch_size, window_size, mode=mode, **kwargs)
-        chart["Anno"] = tmp
-        out[ticker] = chart
+    for ticker, chart in tqdm(data[0].items(), desc="Annotating"):
+        if len(chart) > 2 * window_size:
+            annot = _annotate(chart, fn, batch_size, window_size, mode=mode, **kwargs)
+            out[ticker] = (chart, annot)
     return out
 
 class AnnotateDataset(Dataset):
@@ -67,9 +70,8 @@ def _annotate(chart: pd.DataFrame, fn: Callable[[npt.NDArray[np.float32]], npt.N
         exploitable_len = len(data) - window_size
         missing = exploitable_len - (exploitable_len // batch_size) * batch_size
         b = data[-missing - window_size:]
-
         b = np.lib.stride_tricks.sliding_window_view(b, window_shape=(window_size, ncols), axis=(0, 1))[:, 0, :, :]
-        out.append(ma(b))
+        out.append(fn(b))
     else:
         b_data = np.lib.stride_tricks.sliding_window_view(data, window_shape=(window_size, ncols), axis=(0, 1))[:, 0, :, :]
         dataset = AnnotateDataset(b_data, **kwargs)
@@ -77,7 +79,7 @@ def _annotate(chart: pd.DataFrame, fn: Callable[[npt.NDArray[np.float32]], npt.N
         for b in loader:
             out.append(fn(b.numpy()))
 
-    return np.concatenate(([np.nan for _ in range(window_size - 1)], *out))
+    return np.concatenate(([[np.nan, np.nan, np.nan] for _ in range(window_size - 1)], *out))
 
 def ma(data: npt.NDArray[np.float32]) -> npt.NDArray[np.int8]:
     """
@@ -93,39 +95,83 @@ def ma(data: npt.NDArray[np.float32]) -> npt.NDArray[np.int8]:
 
 
 def save_annotations(annotations: Dict[str, pd.DataFrame], filename: str):
-    with pd.HDFStore(filename, 'w') as store:
-        for ticker, annotation in annotations.items():
-            store.put(ticker, annotation)
+    with h5py.File(filename, 'w') as f:
+        for key, (df, array) in annotations.items():
+            # Store DataFrame as a table
+            group = f.create_group(key)
 
-def load_annotations(filename: str) -> Dict[str, pd.DataFrame]:
+            # Convert DataFrame to numpy array and store as dataset
+            group.create_dataset('dataframe', data=df.to_numpy())
+            group.create_dataset('index', data=df.index.values.astype('datetime64[ns]').astype(np.float64))
+
+            # Store numpy array as a dataset
+            group.create_dataset('array', data=array)
+
+def load_annotations(filename: str) -> Dict[str, Tuple[pd.DataFrame, np.ndarray]]:
     annotations = {}
-    with pd.HDFStore(filename, 'r') as store:
-        for key in store.keys():
-            annotations[key[1:]] = store[key]
+    # Open the HDF5 file in read mode
+    with h5py.File(filename, 'r') as f:
+        # Iterate over each group in the file
+        for key in f.keys():
+            group = f[key]
+
+            # Load the DataFrame (as a numpy array) and convert it back to DataFrame
+            df_data = group['dataframe'][:]
+            # Load the index and convert it back to a DatetimeIndex if necessary
+            index_data = group['index'][:]
+            df_index = pd.to_datetime(index_data)
+
+            # Reconstruct the DataFrame
+            df = pd.DataFrame(df_data, index=df_index,
+                              columns=[f"col{i}" for i in range(df_data.shape[1])])  # Recreate DataFrame
+
+            # Load the numpy array
+            array = group['array'][:]
+
+            # Store the DataFrame and array as a tuple in the dictionary
+            annotations[key] = (df, array)
+
     return annotations
 
-def prep_batch(batch, mode: str = 'substract', p_quant: int = 128, decay: float = 20.):
+def prep_image(b, p, m):
+    image = gen_image(b, p, mode=m)
+    image = image.permute(2, 0, 1)
+
+    # Interpolate 2x
+    image = F.interpolate(image.unsqueeze(0), scale_factor=2, mode='nearest').squeeze(0)
+    return image.float()
+
+def prep_batch(batch, mode: str = 'subtract', p_quant: int = 128, decay: float = 20.):
     B, L, _ = batch.shape
-    out = torch.empty(B, p_quant, L, 3)
-    # for i in range(B):
-    #     out[i] = gen_image(batch[i], p_quant, mode, decay)
-    [gen_image(batch[i], p_quant, mode, decay) for i in range(B)]
+    out = torch.stack([prep_image(batch[i], p_quant, mode) for i in range(B)]).float()
     return out
 
+# Annotate from saved model
+config = ConfigFile("../deep/configs/E_s.yml")
+model = models.from_name(config)
+weights = torch.load(f"../deep/{config['model']['model_dir']}/1/{config['model']['name']}.pth")
+model.load_state_dict(weights["model_state_dict"])
+model.cuda()
+model.eval()
+
+@torch.inference_mode()
 def tmp(batch):
-    _ = prep_batch(batch)
-    return np.zeros((batch.shape[0]))
+    data = prep_batch(batch, p_quant=config["data"]["p_quant"]).cuda()
+    pred = model(data)
+    out = torch.softmax(pred, dim=1).cpu().numpy()
+    return out
 
 if __name__ == "__main__":
-    pipe = Finviz("https://finviz.com/screener.ashx?v=111&f=cap_largeover%2Cexch_nyse%2Cidx_sp500%2Cipodate_more5"
-                  ,True) | JSONCache() | \
+    pipe = Finviz("https://finviz.com/screener.ashx?v=111&f=ipodate_more5", True) | JSONCache() | \
            FetchCharts(progress=True, throttle=1., auto_adjust=False) | \
-           Cache() | FilterNoneCharts() | Sample() | CausalImpute() | PadNan() | ToTSData()
+           Cache() | FilterNoneCharts() | RmTz() | CausalImpute()
     print(pipe)
-    data = pipe.get(datetime(2000, 1, 1), datetime(2020, 1, 1))
-    annotated_data = annotate(data, ma, window_size=64, batch_size=256, mode='iterative')
+    data = pipe.get(datetime(2000, 1, 1), datetime(2024, 1, 1))
+    data = split_data(data, datetime(2019, 12, 13), datetime(2024, 1, 1))
+
+    keys = list(data.keys())[:5]
+    data = {key:data[key] for key in keys}
+
+    annotated_data = annotate([data], tmp, window_size=config["data"]["window_len"], batch_size=config["data"]["batch_size"], mode='iterative')
     print("Saving annotations")
-    save_annotations(annotated_data, "annotations.anno")
-    print("Loading annotations")
-    loaded_annotations = [load_annotations("annotations.anno")]
-    print(loaded_annotations)
+    save_annotations(annotated_data, "annotations/E_s.anno")
