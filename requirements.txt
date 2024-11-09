@@ -11,3 +11,5 @@ PyYAML
 torchinfo
 tensorboard
 torchmetrics
+h5py
+tables

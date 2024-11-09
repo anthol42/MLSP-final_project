@@ -42,7 +42,7 @@ htmlcov/
 .nox/
 .coverage
 .coverage.*
-.cache
+.cache.bak
 nosetests.xml
 coverage.xml
 *.cover
@@ -176,3 +176,5 @@ runs/
 ._*
 
 tmp.py
+
+.cache*
