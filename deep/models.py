@@ -22,7 +22,7 @@ def from_name(config):
         model: torchvision.models.VisionTransformer = torchvision.models.vit_b_16(weights=torchvision.models.ViT_B_16_Weights.IMAGENET1K_V1)
         model.heads[0] = nn.Linear(768, 3)
     elif name == "VIT_b_32":
-        model: torchvision.models.VisionTransformer = torchvision.models.vit_b_32(weights=torchvision.models.ViT_B_16_Weights.IMAGENET1K_V1)
+        model: torchvision.models.VisionTransformer = torchvision.models.vit_b_32(weights=torchvision.models.ViT_B_32_Weights.IMAGENET1K_V1)
         model.heads[0] = nn.Linear(768, 3)
     elif name == "ConvNeXt_tiny":
         model: torchvision.models.ConvNeXt = torchvision.models.convnext_tiny(weights=torchvision.models.ConvNeXt_Tiny_Weights.IMAGENET1K_V1)

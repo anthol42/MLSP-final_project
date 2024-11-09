@@ -31,3 +31,5 @@ urllib3
 pandas
 torchinfo
 tensorboard
+tqdm
+backtest-pro
