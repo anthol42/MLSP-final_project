@@ -1,7 +1,7 @@
 data:
-  batch_size: 64
+  batch_size: 200
   shuffle: True
-  num_workers: 2
+  num_workers: 2 # 2633s
   mode: "subtract"
   p_quant: 128
   window_len: 128
