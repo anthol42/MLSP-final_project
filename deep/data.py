@@ -235,8 +235,9 @@ class ImageDataset(Dataset):
         offsets = [-1]
         out_data = []
         for name, chart in tqdm(data.items()):
-            offsets.append(len(chart) - window_len + 1)
-            out_data.append((torch.from_numpy(chart.values), annotate_tickers(chart.values, WINDOW_SIZE)))
+            if len(chart) > window_len + WINDOW_SIZE + 1:
+                offsets.append(len(chart) - window_len + 1)
+                out_data.append((torch.from_numpy(chart.values), annotate_tickers(chart.values, WINDOW_SIZE)))
         offsets.append(offsets[-1] + 1)    # To avoid an overflow in the indexing algorithm where all offset are passed
         offsets = np.cumsum(offsets)
         return offsets, out_data

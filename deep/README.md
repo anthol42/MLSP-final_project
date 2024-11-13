@@ -12,7 +12,8 @@ It is in this folder that we will implement the training loop and make the deep 
 
 ### Parameters
 - MODEL: EffiecentNetV2 (S, M), ViT(32 and 16), ConvNeXT (Tiny, Small)
-- Dataset size: 5%, 10%, 30%, 60%, 100%
+- Effect of substract or add (Image generation) on performances. (For best model)
+- Dataset size: 5%, 10%, 30%, 60%, 100% (For best model and best image generation technique)
 
 ## How to use
 ```bash

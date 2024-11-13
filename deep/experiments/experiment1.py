@@ -24,7 +24,7 @@ metrics = {
 }
 
 def experiment1(args, kwargs):
-    pipe = Finviz("https://finviz.com/screener.ashx?v=111&f=cap_largeover%2Cexch_nyse%2Cidx_sp500%2Cipodate_more5",True) | JSONCache() | \
+    pipe = Finviz("https://finviz.com/screener.ashx?v=111&f=ipodate_more5",True) | JSONCache() | \
            FetchCharts(progress=True, throttle=1., auto_adjust=False) | \
            Cache() | FilterNoneCharts() | RmTz() | CausalImpute()
 

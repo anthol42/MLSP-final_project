@@ -178,3 +178,5 @@ runs/
 tmp.py
 
 .cache*
+
+annotations/
