@@ -6,7 +6,10 @@ config_format = {
         "p_quant": int,
         "window_len": int,
         "num_workers": int,
-        "random_seed": int
+        "random_seed": int,
+        "space_between": int,
+        "enlarge_factor": int,
+        "interpolation_factor": int
     },
     "training":{
         "num_epochs": int,
