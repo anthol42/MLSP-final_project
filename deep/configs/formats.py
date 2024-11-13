@@ -9,7 +9,8 @@ config_format = {
         "random_seed": int,
         "space_between": int,
         "enlarge_factor": int,
-        "interpolation_factor": int
+        "interpolation_factor": int,
+        "offset": int
     },
     "training":{
         "num_epochs": int,

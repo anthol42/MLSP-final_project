@@ -179,21 +179,29 @@ def annotate_tickers(chart: np.ndarray, WINDOW_SIZE = 14):
     annotations = add_neutral_v2(annotations, dur=7)
     return annotations
 
+def annotate_chart_change(chart: np.ndarray, offset = 1):
+    today = chart[:-offset]
+    next_day = chart[offset:]
+    classes = (next_day[:, 3] > today[:, 3]).astype(int)
+    return np.concatenate([classes, [np.nan] * offset])
+
 class ImageDataset(Dataset):
     LABELS = ["DOWN", "UP", "NEUTRAL"]
     def __init__(self, data: Dict[str, pd.DataFrame], p_quant: int = 128, window_len: int = 256, mode: str = 'subtract', fract: float = 1.,
-                 random_seed: Optional[int] = None, space_between: int = 0, enlarge_factor: int = 1, interpolation_factor: int = 2):
+                 random_seed: Optional[int] = None, space_between: int = 0, enlarge_factor: int = 1,
+                 interpolation_factor: int = 2, annotation_type: str = 'default', offset: int = 1):
         """
         :param data: The data fetched from the data pipeline
         :param p_quant: The precision of the quantification (Number of bins or height of the image)
         :param window_len: The length of the window that the image will represent (Width of the image)
         :param mode: The mode: add or subtract
         :param fract: The fraction of the dataset to use.
-        :param random_seed: The random seed to use in the dataset. NOTE: It will set the random seed globally in
+        :param random_seed: The random seed to use in the dataset. NOTE: It will set the random seed globally in python's random module
         :param space_between: The number of pixel between each candle
         :param enlarge_factor: Width in pixels of the candles
         :param interpolation_factor: The factor to interpolate the image. If 1, no interpolation is done
-        python's random module
+        :param annotation_type: The type of annotation to use (default or change)
+        :param offset: The number of day in the future to to use in the change annotation (Used only if annotation_type is change)
         """
         self.p_quant = p_quant
         self.window_len = window_len
@@ -203,7 +211,13 @@ class ImageDataset(Dataset):
         self.interpolation_factor = interpolation_factor
         if fract < 1.:
             data = self.sample_data(data, fract, seed=random_seed)
-        self.offsets, self.data = self.process_data(data, window_len)
+
+        if annotation_type == 'default':
+            self.offsets, self.data = self.process_data(data, window_len)
+        elif annotation_type == 'change':
+            self.offsets, self.data = self.process_data_change_annotation(data, window_len, offset)
+        else:
+            raise ValueError(f"Unknown annotation type: {annotation_type}")
 
     @staticmethod
     def sample_data(data: Dict[str, pd.DataFrame], frac, seed: Optional[int] = None) -> Dict[str, pd.DataFrame]:
@@ -235,13 +249,30 @@ class ImageDataset(Dataset):
         offsets = [-1]
         out_data = []
         for name, chart in tqdm(data.items()):
-            if len(chart) > window_len + WINDOW_SIZE + 1:
+            if len(chart) > window_len + 4 * WINDOW_SIZE + 1:
                 offsets.append(len(chart) - window_len + 1)
-                out_data.append((torch.from_numpy(chart.values), annotate_tickers(chart.values, WINDOW_SIZE)))
+                out_data.append((torch.from_numpy(chart.values[2 * WINDOW_SIZE:-2 * WINDOW_SIZE]),
+                                 annotate_tickers(chart.values, WINDOW_SIZE)[2 * WINDOW_SIZE:-2 * WINDOW_SIZE]))
         offsets.append(offsets[-1] + 1)    # To avoid an overflow in the indexing algorithm where all offset are passed
         offsets = np.cumsum(offsets)
         return offsets, out_data
 
+    @staticmethod
+    def process_data_change_annotation(data: Dict[str, pd.DataFrame], window_len, offset: int = 1) -> Tuple[np.ndarray, List[torch.Tensor]]:
+        """
+        Process the data into the format we want and generate the index
+        :param data: The raw data to process
+        :param window_len: The length of the window
+        :return: The index, the processed data
+        """
+        offsets = [-1]
+        out_data = []
+        for name, chart in tqdm(data.items()):
+            if len(chart) > window_len + 4 * WINDOW_SIZE + 1:
+                offsets.append(len(chart) - window_len + 1)
+                out_data.append((torch.from_numpy(chart.values[:-offset]),
+                                 annotate_chart_change(chart.values, offset)[:-offset]))
+        offsets.append(offsets[-1] + 1)
     def __getitem__(self, idx):
         # Get coordinates
         chart_idx = np.argmin(idx > self.offsets[1:])
@@ -283,7 +314,8 @@ def split_data(data: Dict[str, pd.DataFrame], start: datetime, end: datetime) ->
     for name, chart in data.items():
         out[name] = chart.loc[start.date():end.date()]
     return out
-def make_dataloader(config, pipe: DataPipe, start: datetime, train_end: datetime, val_end: datetime, test_end: datetime, fract: float = 1.):
+def make_dataloader(config, pipe: DataPipe, start: datetime, train_end: datetime, val_end: datetime, test_end: datetime,
+                    fract: float = 1., annotation_type: str = "default"):
     # Step 1: Fetch the data
     data = pipe.get(start, test_end)
 
@@ -298,14 +330,26 @@ def make_dataloader(config, pipe: DataPipe, start: datetime, train_end: datetime
                             random_seed=config["data"]["random_seed"],
                             space_between=config["data"]["space_between"],
                             enlarge_factor=config["data"]["enlarge_factor"],
-                            interpolation_factor=config["data"]["interpolation_factor"]
+                            interpolation_factor=config["data"]["interpolation_factor"],
+                            annotation_type=annotation_type,
+                            offset=config["data"]["offset"]
                             )
     val_ds = ImageDataset(val_data, mode=config["data"]["mode"], p_quant=config["data"]["p_quant"],
                           window_len=config["data"]["window_len"], fract=fract,
-                            random_seed=config["data"]["random_seed"])
+                            random_seed=config["data"]["random_seed"],
+                            space_between=config["data"]["space_between"],
+                            enlarge_factor=config["data"]["enlarge_factor"],
+                            interpolation_factor=config["data"]["interpolation_factor"],
+                            annotation_type=annotation_type,
+                            offset=config["data"]["offset"])
     test_ds = ImageDataset(test_data, mode=config["data"]["mode"], p_quant=config["data"]["p_quant"],
                            window_len=config["data"]["window_len"], fract=fract,
-                            random_seed=config["data"]["random_seed"])
+                            random_seed=config["data"]["random_seed"],
+                            space_between=config["data"]["space_between"],
+                            enlarge_factor=config["data"]["enlarge_factor"],
+                            interpolation_factor=config["data"]["interpolation_factor"],
+                            annotation_type=annotation_type,
+                            offset=config["data"]["offset"])
 
     # Step 4: Initialize the dataloaders
     train_dataloader = DataLoader(train_ds, batch_size=config["data"]["batch_size"], shuffle=config["data"]["shuffle"],
@@ -323,16 +367,25 @@ if __name__ == "__main__":
     TICKERS = ['AAPL', 'NVDA', 'META', "AMZN"]
     pipe = FetchCharts(TICKERS) | Cache()
     data = pipe.get(datetime(2000, 1, 1), datetime(2020, 1, 1))
-    data = pipe.get(datetime(2000, 1, 1), datetime(2020, 1, 1))
-    dataset = ImageDataset(data, mode='subtract', window_len=20, space_between=1, enlarge_factor=1, interpolation_factor=1)
-    print(len(data["AAPL"]), len(data["NVDA"]), len(data["META"]))
-    # print(dataset[11214])
-    print(len(dataset))
-    k = 0
-    for i, (image, label) in enumerate(tqdm(dataset)):
-        if i % 256 == 0:
-            plt.imshow(image.permute(1, 2, 0), aspect=1)
-            plt.tight_layout()
-            # plt.axis("off")
-            plt.show()
-            # plt.savefig("/Users/alavertu/Downloads/viz_repr_no_spectrum.png", dpi=400)
+    annot = annotate_tickers(data["AAPL"].values)
+    print(annot)
+    # plt.plot(data["AAPL"].index, data["AAPL"]["Close"])
+    # labels_up = data["AAPL"]["Close"].values.copy()
+    # labels_up[annot == 0] = np.nan
+    # labels_down = data["AAPL"]["Close"].values.copy()
+    # labels_down[annot == 1] = np.nan
+    # plt.scatter(data["AAPL"].index, labels_up, color='green')
+    # plt.scatter(data["AAPL"].index, labels_down, color='red')
+    # plt.show()
+    # dataset = ImageDataset(data, mode='subtract', window_len=20, space_between=1, enlarge_factor=1, interpolation_factor=1)
+    # print(len(data["AAPL"]), len(data["NVDA"]), len(data["META"]))
+    # # print(dataset[11214])
+    # print(len(dataset))
+    # k = 0
+    # for i, (image, label) in enumerate(tqdm(dataset)):
+    #     if i % 256 == 0:
+    #         plt.imshow(image.permute(1, 2, 0), aspect=1)
+    #         plt.tight_layout()
+    #         # plt.axis("off")
+    #         plt.show()
+    #         # plt.savefig("/Users/alavertu/Downloads/viz_repr_no_spectrum.png", dpi=400)
