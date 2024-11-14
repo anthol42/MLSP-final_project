@@ -2,7 +2,7 @@ from torch import nn
 import torch
 import torch.nn.functional as F
 from torch.utils.data import Dataset
-from typing import Tuple, Dict, List, Optional
+from typing import Tuple, Dict, List, Optional, Set
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
@@ -185,9 +185,25 @@ def annotate_chart_change(chart: np.ndarray, offset = 1):
     classes = (next_day[:, 3] > today[:, 3]).astype(int)
     return np.concatenate([classes, [np.nan] * offset])
 
+def sample_tickers(data: Dict[str, pd.DataFrame], fract: float, seed: Optional[int] = None) -> Set[str]:
+    """
+    Sample a fraction of the given data. Sample across stocks (Ex: keep 42 stocks out of 400)
+    :param data: The data to be sampled from
+    :param fract: The fraction of the original data to keep
+    :param seed: The random seed to use. If None, no random seed is set.  NOTE: Setting the random seed here will
+    set the random seed globally
+    :return: The sampled data
+    """
+    if seed is not None:
+        random.seed(seed)
+    keys = list(data.keys())
+    # Shuffle
+    random.shuffle(keys)
+    threshold = int(fract * len(data))
+    return {ticker for ticker in keys[:threshold]}
 class ImageDataset(Dataset):
     LABELS = ["DOWN", "UP", "NEUTRAL"]
-    def __init__(self, data: Dict[str, pd.DataFrame], p_quant: int = 128, window_len: int = 256, mode: str = 'subtract', fract: float = 1.,
+    def __init__(self, data: Dict[str, pd.DataFrame], p_quant: int = 128, window_len: int = 256, mode: str = 'subtract', tickers: Optional[Set[str]] = None,
                  random_seed: Optional[int] = None, space_between: int = 0, enlarge_factor: int = 1,
                  interpolation_factor: int = 2, annotation_type: str = 'default', offset: int = 1):
         """
@@ -195,7 +211,7 @@ class ImageDataset(Dataset):
         :param p_quant: The precision of the quantification (Number of bins or height of the image)
         :param window_len: The length of the window that the image will represent (Width of the image)
         :param mode: The mode: add or subtract
-        :param fract: The fraction of the dataset to use.
+        :param tickers: The tickers to sample. If none, all the data is used
         :param random_seed: The random seed to use in the dataset. NOTE: It will set the random seed globally in python's random module
         :param space_between: The number of pixel between each candle
         :param enlarge_factor: Width in pixels of the candles
@@ -209,8 +225,8 @@ class ImageDataset(Dataset):
         self.space_between = space_between
         self.enlarge_factor = enlarge_factor
         self.interpolation_factor = interpolation_factor
-        if fract < 1.:
-            data = self.sample_data(data, fract, seed=random_seed)
+        if tickers is not None:
+            data = self.sample_data(data, tickers)
 
         if annotation_type == 'default':
             self.offsets, self.data = self.process_data(data, window_len)
@@ -220,7 +236,7 @@ class ImageDataset(Dataset):
             raise ValueError(f"Unknown annotation type: {annotation_type}")
 
     @staticmethod
-    def sample_data(data: Dict[str, pd.DataFrame], frac, seed: Optional[int] = None) -> Dict[str, pd.DataFrame]:
+    def sample_data(data: Dict[str, pd.DataFrame], tickers: Set[str]) -> Dict[str, pd.DataFrame]:
         """
         Sample a fraction of the given data. Sample across stocks (Ex: keep 42 stocks out of 400)
         :param data: The data to be sampled from
@@ -229,13 +245,7 @@ class ImageDataset(Dataset):
         set the random seed globally
         :return: The sampled data
         """
-        if seed is not None:
-            random.seed(seed)
-        keys = list(data.keys())
-        # Shuffle
-        random.shuffle(keys)
-        threshold = int(frac * len(data))
-        return {ticker: data[ticker] for ticker in keys[:threshold]}
+        return {ticker: data[ticker] for ticker in tickers}
 
 
     @staticmethod
@@ -273,6 +283,8 @@ class ImageDataset(Dataset):
                 out_data.append((torch.from_numpy(chart.values[:-offset]),
                                  annotate_chart_change(chart.values, offset)[:-offset]))
         offsets.append(offsets[-1] + 1)
+        offsets = np.cumsum(offsets)
+        return offsets, out_data
     def __getitem__(self, idx):
         # Get coordinates
         chart_idx = np.argmin(idx > self.offsets[1:])
@@ -324,9 +336,14 @@ def make_dataloader(config, pipe: DataPipe, start: datetime, train_end: datetime
     val_data = split_data(data, train_end + timedelta(days=1), val_end)
     test_data = split_data(data, val_end + timedelta(days=1), test_end)
 
+    if fract < 1.:
+        tickers = sample_tickers(train_data, fract, seed=config["data"]["random_seed"])
+    else:
+        tickers = None
+
     # Step 3: Make the datasets
     train_ds = ImageDataset(train_data, mode=config["data"]["mode"], p_quant=config["data"]["p_quant"],
-                            window_len=config["data"]["window_len"], fract=fract,
+                            window_len=config["data"]["window_len"], tickers=tickers,
                             random_seed=config["data"]["random_seed"],
                             space_between=config["data"]["space_between"],
                             enlarge_factor=config["data"]["enlarge_factor"],
@@ -335,7 +352,7 @@ def make_dataloader(config, pipe: DataPipe, start: datetime, train_end: datetime
                             offset=config["data"]["offset"]
                             )
     val_ds = ImageDataset(val_data, mode=config["data"]["mode"], p_quant=config["data"]["p_quant"],
-                          window_len=config["data"]["window_len"], fract=fract,
+                          window_len=config["data"]["window_len"], tickers=tickers,
                             random_seed=config["data"]["random_seed"],
                             space_between=config["data"]["space_between"],
                             enlarge_factor=config["data"]["enlarge_factor"],
@@ -343,7 +360,7 @@ def make_dataloader(config, pipe: DataPipe, start: datetime, train_end: datetime
                             annotation_type=annotation_type,
                             offset=config["data"]["offset"])
     test_ds = ImageDataset(test_data, mode=config["data"]["mode"], p_quant=config["data"]["p_quant"],
-                           window_len=config["data"]["window_len"], fract=fract,
+                           window_len=config["data"]["window_len"], tickers=tickers,
                             random_seed=config["data"]["random_seed"],
                             space_between=config["data"]["space_between"],
                             enlarge_factor=config["data"]["enlarge_factor"],

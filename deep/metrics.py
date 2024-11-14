@@ -27,5 +27,5 @@ def precision_2d(targets, pred):
     :param pred: Shape (B, 2)
     :return: Scalar tensor
     """
-    hard_pred = torch.argmax(pred, dim=1)
+    hard_pred = np.argmax(pred, axis=1)
     return precision_score(targets, hard_pred, zero_division=0)

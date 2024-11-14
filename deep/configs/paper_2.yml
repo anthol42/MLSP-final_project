@@ -19,5 +19,5 @@ training:
   weight_decay:  0.00005
 model:
   model_dir: "saved_models"
-  name: "paper_model"
+  name: "paper"
   dropout: 0.25
