@@ -250,7 +250,7 @@ class ImageDataset(Dataset):
         out_data = []
         for name, chart in tqdm(data.items()):
             if len(chart) > window_len + 4 * WINDOW_SIZE + 1:
-                offsets.append(len(chart) - window_len + 1)
+                offsets.append(len(chart) - window_len - 4 * WINDOW_SIZE + 1)
                 out_data.append((torch.from_numpy(chart.values[2 * WINDOW_SIZE:-2 * WINDOW_SIZE]),
                                  annotate_tickers(chart.values, WINDOW_SIZE)[2 * WINDOW_SIZE:-2 * WINDOW_SIZE]))
         offsets.append(offsets[-1] + 1)    # To avoid an overflow in the indexing algorithm where all offset are passed
@@ -268,8 +268,8 @@ class ImageDataset(Dataset):
         offsets = [-1]
         out_data = []
         for name, chart in tqdm(data.items()):
-            if len(chart) > window_len + 4 * WINDOW_SIZE + 1:
-                offsets.append(len(chart) - window_len + 1)
+            if len(chart) > window_len + offset + 1:
+                offsets.append(len(chart) - window_len - offset + 1)
                 out_data.append((torch.from_numpy(chart.values[:-offset]),
                                  annotate_chart_change(chart.values, offset)[:-offset]))
         offsets.append(offsets[-1] + 1)
