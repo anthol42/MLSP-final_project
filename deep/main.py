@@ -10,7 +10,7 @@ parser = argparse.ArgumentParser()
 # ------------------------------------------- Import here your experiments ------------------------------------------- #
 # ######################################################################################################################
 from experiments.experiment1 import experiment1
-
+from experiments.experiment2 import experiment2
 
 
 # ######################################################################################################################
@@ -29,6 +29,7 @@ parser.add_argument("--fract", required=False, type=float, default=1.) # Fractio
 # ######################################################################################################################
 experiments = {
     "experiment1":experiment1,
+    "experiment2":experiment2,
 }
 
 

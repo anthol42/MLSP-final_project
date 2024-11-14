@@ -20,3 +20,12 @@ def custom_precision(targets, pred):
 
     prec = (up_prec + down_prec) / 2
     return prec
+
+def precision_2d(targets, pred):
+    """
+    :param targets: Shape (B, ) # 0: Down, 1: Up
+    :param pred: Shape (B, 2)
+    :return: Scalar tensor
+    """
+    hard_pred = torch.argmax(pred, dim=1)
+    return precision_score(targets, hard_pred, zero_division=0)
