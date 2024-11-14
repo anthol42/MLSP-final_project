@@ -28,6 +28,7 @@ def annotate(data: List[Dict[str, pd.DataFrame]], fn: Callable[[npt.NDArray[np.f
     for ticker, chart in tqdm(data[0].items(), desc="Annotating"):
         if len(chart) > 2 * window_size:
             annot = _annotate(chart, fn, batch_size, window_size, mode=mode, **kwargs)
+            assert len(annot) == len(chart), f"Length of annotation is not the same as the one from the chart. Annot: {len(annot)}, chart: {len(chart)}"
             out[ticker] = (chart, annot)
     return out
 
@@ -60,7 +61,7 @@ def _annotate(chart: pd.DataFrame, fn: Callable[[npt.NDArray[np.float32]], npt.N
     ncols = data.shape[1]
     if mode == 'iterative':
         for i in range(0,
-                   (n - batch_size - window_size),
+                   (n - batch_size - window_size + 1),
                    batch_size):
             b = data[i:i + batch_size + window_size - 1]
             b = np.lib.stride_tricks.sliding_window_view(b, window_shape=(window_size, ncols), axis=(0, 1))[:, 0, :, :]
@@ -169,8 +170,8 @@ if __name__ == "__main__":
     data = pipe.get(datetime(2000, 1, 1), datetime(2024, 1, 1))
     data = split_data(data, datetime(2019, 12, 13), datetime(2024, 1, 1))
 
-    keys = list(data.keys())[:5]
-    data = {key:data[key] for key in keys}
+    # keys = list(data.keys())[:5]
+    # data = {key:data[key] for key in keys}
 
     annotated_data = annotate([data], tmp, window_size=config["data"]["window_len"], batch_size=config["data"]["batch_size"], mode='iterative')
     print("Saving annotations")
