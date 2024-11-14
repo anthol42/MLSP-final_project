@@ -1,4 +1,4 @@
-from backtest.data import JSONCache, FetchCharts, Cache, FilterNoneCharts, CausalImpute, ToTSData, PadNan, Process, PipeOutput
+from backtest.data import JSONCache, FetchCharts, Cache, FilterNoneCharts, CausalImpute, ToTSData, PadNan, Process, PipeOutput, DataPipe, DataPipeType
 from deep.pipes import Finviz, RmTz
 from datetime import datetime
 from backtest import Strategy, Backtest, RecordsBucket, TSData, Record
@@ -6,6 +6,7 @@ import pandas as pd
 from typing import Optional, Dict
 import numpy as np
 from tqdm import tqdm
+from evaluation.dist import load_annotations
 
 N_STOCKS = 500
 @Process
@@ -14,24 +15,25 @@ def Sample(frm: datetime, to: datetime, *args, po: Optional[PipeOutput[Dict[str,
     np.random.shuffle(keys)
     return {k: po.value[k] for k in keys[:N_STOCKS]}
 
-def annotate(data: Dict[str, TSData]):
-    out = {}
-    for ticker, ts in tqdm(data[0].items(), desc="Annotating"):
-        chart = ts.data
-        ma = chart["Close"].rolling(14).mean()
-        over = chart["Close"] >= ma
-        chart["Anno"] = over.astype(int) # 0: under = sell, 1: over = buy
-        ts.data = chart
+class LoadAnnotation(DataPipe):
+    def __init__(self, annotations):
+        super().__init__(DataPipeType.FETCH)
+        self.annotation = annotations
+    def fetch(self, frm: datetime, to: datetime, *args, po: Optional[PipeOutput[Dict[str, pd.DataFrame]]], **kwargs):
+        data = load_annotations(self.annotation)
+        out = {}
+        for ticker, (chart, annotations) in data.items():
+            print(ticker, chart.shape, annotations.shape)
+            chart["Down"] = annotations[:, 0]
+            chart["Up"] = annotations[:, 1]
+            chart["Neutral"] = annotations[:, 2]
+            out[ticker] = chart
+        return PipeOutput(out, self)
 
-    return data
-
-pipe = Finviz("https://finviz.com/screener.ashx?v=111&f=cap_largeover%2Cexch_nyse%2Cidx_sp500%2Cipodate_more5"
-              ,True) | JSONCache() | \
-       FetchCharts(progress=True, throttle=1., auto_adjust=False) | \
-       Cache() | FilterNoneCharts() | Sample() | CausalImpute() | PadNan() | ToTSData()
+pipe = LoadAnnotation(annotations="annotations/E_s.anno") | Sample() | ToTSData()
 print(pipe)
 data = pipe.get(datetime(2000, 1, 1), datetime(2020, 1, 1))
-annotated_data = annotate(data)
+
 class NaiveStrategy(Strategy):
     def run(self, data: RecordsBucket, timestep: datetime):
         data = data.main
@@ -48,7 +50,7 @@ class NaiveStrategy(Strategy):
                 self.broker.sell_long(name, self.portfolio.long[name].amount)
 
 # The magnificent 7 tickers
-bt = Backtest(annotated_data,
+bt = Backtest(data,
               strategy=NaiveStrategy(),
               window=1)
 results = bt.run()
