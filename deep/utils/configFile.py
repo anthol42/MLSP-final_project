@@ -239,7 +239,7 @@ class ConfigFile(_Config):
         key: str
         for key, value in kwargs.items():
             if key.startswith("config."):
-                path = key.strip("config").split(".")[1:]
+                path = key[7:].split(".")
                 sub_config = self
                 for sub_key in path[:-1]:
                     if sub_key in sub_config:

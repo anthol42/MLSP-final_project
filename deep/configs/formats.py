@@ -10,7 +10,8 @@ config_format = {
         "space_between": int,
         "enlarge_factor": int,
         "interpolation_factor": int,
-        "offset": int
+        "offset": int,
+        "plt_fig": bool
     },
     "training":{
         "num_epochs": int,

@@ -12,6 +12,15 @@ from datetime import datetime, timedelta
 from backtest.data import DataPipe
 import random
 import numpy.typing as npt
+import mplfinance as mpf
+import matplotlib as mpl
+import io
+import cv2
+mpl.rcParams['savefig.pad_inches'] = 0
+mc = mpf.make_marketcolors(up='#00FF00', down='#FF0000',
+                           wick="#999999",
+                           edge="inherit")
+s = mpf.make_mpf_style(marketcolors=mc, figcolor="black")
 
 WINDOW_SIZE = 14
 
@@ -121,6 +130,23 @@ def gen_image(chart: np.ndarray, p_quant = 128, mode='substract', decay: float =
         image = np.repeat(image, enlarge_factor, axis=1)
     return torch.from_numpy(image)
 
+def gen_plt_image(chart: np.ndarray) -> torch.Tensor:
+    chart = pd.DataFrame(chart[:, :5], columns=["Open", "High", "Low", "Close", "Volume"],
+                         index=pd.date_range("2020-01-01", periods=len(chart), freq='D'))
+    fig, ax = mpf.plot(chart, type='candle', style=s,
+                       volume=False, ylabel='Price', ylabel_lower='Volume', figsize=(1, 1),
+                       returnfig=True, axisoff=True, tight_layout=True, scale_padding=0.)
+    io_buf = io.BytesIO()
+    fig.savefig(io_buf, format="png", pad_inches=0, bbox_inches='tight')
+    io_buf.seek(0)
+    arr = np.frombuffer(io_buf.getvalue(), dtype=np.uint8)
+    io_buf.close()
+    plt.close(fig)
+    img = cv2.imdecode(arr, 1)
+    img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB).astype(np.float32) / img.max()
+    tensor = torch.from_numpy(img).permute(2, 0, 1)
+    return tensor
+
 def add_neutral_v2(anot: npt.NDArray[bool], dur : int = 7):
     # Compute the length of each consecutive sequence of True values
     change_points = np.diff(anot.astype(int)).nonzero()[0] + 1
@@ -205,7 +231,7 @@ class ImageDataset(Dataset):
     LABELS = ["DOWN", "UP", "NEUTRAL"]
     def __init__(self, data: Dict[str, pd.DataFrame], p_quant: int = 128, window_len: int = 256, mode: str = 'subtract', tickers: Optional[Set[str]] = None,
                  random_seed: Optional[int] = None, space_between: int = 0, enlarge_factor: int = 1,
-                 interpolation_factor: int = 2, annotation_type: str = 'default', offset: int = 1):
+                 interpolation_factor: int = 2, annotation_type: str = 'default', offset: int = 1, plt_fig: bool = False):
         """
         :param data: The data fetched from the data pipeline
         :param p_quant: The precision of the quantification (Number of bins or height of the image)
@@ -218,6 +244,7 @@ class ImageDataset(Dataset):
         :param interpolation_factor: The factor to interpolate the image. If 1, no interpolation is done
         :param annotation_type: The type of annotation to use (default or change)
         :param offset: The number of day in the future to to use in the change annotation (Used only if annotation_type is change)
+        :param plt_fig: If True, the image is generated using matplotlib renderer instead of the custom one
         """
         self.p_quant = p_quant
         self.window_len = window_len
@@ -225,6 +252,7 @@ class ImageDataset(Dataset):
         self.space_between = space_between
         self.enlarge_factor = enlarge_factor
         self.interpolation_factor = interpolation_factor
+        self.plt_fig = plt_fig
         if tickers is not None:
             data = self.sample_data(data, tickers)
 
@@ -285,6 +313,7 @@ class ImageDataset(Dataset):
         offsets.append(offsets[-1] + 1)
         offsets = np.cumsum(offsets)
         return offsets, out_data
+
     def __getitem__(self, idx):
         # Get coordinates
         chart_idx = np.argmin(idx > self.offsets[1:])
@@ -292,7 +321,12 @@ class ImageDataset(Dataset):
         # Return the processed sample and the label
         chart, labels = self.data[chart_idx]
         window = chart[i:i + self.window_len]
-        return (self.process(window, self.p_quant, self.mode, self.space_between, self.enlarge_factor, self.interpolation_factor),
+        if self.plt_fig:
+            width = self.interpolation_factor * (len(window) * self.enlarge_factor + self.space_between * (len(window) - 1))
+            return (self.process_plt(window, (self.p_quant * self.interpolation_factor, width)),
+                    torch.tensor(labels[i + self.window_len - 1]).long())
+        else:
+            return (self.process(window, self.p_quant, self.mode, self.space_between, self.enlarge_factor, self.interpolation_factor),
                 torch.tensor(labels[i + self.window_len - 1]).long())
 
     @staticmethod
@@ -309,6 +343,18 @@ class ImageDataset(Dataset):
         # Interpolate 2x
         if interpolation_factor > 1:
             image = F.interpolate(image.unsqueeze(0), scale_factor=interpolation_factor, mode='nearest').squeeze(0)
+        return image.float()
+
+    @staticmethod
+    def process_plt(window: torch.Tensor, out_size: Tuple[int, int]) -> torch.Tensor:
+        """
+        Render the window chart as an image using matplotlib
+        :param window: The window to process
+        :param out_size: The size of the output image
+        :return: The image, the label
+        """
+        image = gen_plt_image(window.numpy())
+        image = F.interpolate(image.unsqueeze(0), size=out_size, mode='bilinear').squeeze(0)
         return image.float()
 
     def __len__(self):
@@ -349,7 +395,8 @@ def make_dataloader(config, pipe: DataPipe, start: datetime, train_end: datetime
                             enlarge_factor=config["data"]["enlarge_factor"],
                             interpolation_factor=config["data"]["interpolation_factor"],
                             annotation_type=annotation_type,
-                            offset=config["data"]["offset"]
+                            offset=config["data"]["offset"],
+                            plt_fig=config["data"]["plt_fig"]
                             )
     val_ds = ImageDataset(val_data, mode=config["data"]["mode"], p_quant=config["data"]["p_quant"],
                           window_len=config["data"]["window_len"], tickers=tickers,
@@ -358,7 +405,9 @@ def make_dataloader(config, pipe: DataPipe, start: datetime, train_end: datetime
                             enlarge_factor=config["data"]["enlarge_factor"],
                             interpolation_factor=config["data"]["interpolation_factor"],
                             annotation_type=annotation_type,
-                            offset=config["data"]["offset"])
+                            offset=config["data"]["offset"],
+                            plt_fig=config["data"]["plt_fig"]
+                          )
     test_ds = ImageDataset(test_data, mode=config["data"]["mode"], p_quant=config["data"]["p_quant"],
                            window_len=config["data"]["window_len"], tickers=tickers,
                             random_seed=config["data"]["random_seed"],
@@ -366,7 +415,9 @@ def make_dataloader(config, pipe: DataPipe, start: datetime, train_end: datetime
                             enlarge_factor=config["data"]["enlarge_factor"],
                             interpolation_factor=config["data"]["interpolation_factor"],
                             annotation_type=annotation_type,
-                            offset=config["data"]["offset"])
+                            offset=config["data"]["offset"],
+                            plt_fig=config["data"]["plt_fig"]
+                           )
 
     # Step 4: Initialize the dataloaders
     train_dataloader = DataLoader(train_ds, batch_size=config["data"]["batch_size"], shuffle=config["data"]["shuffle"],
@@ -394,15 +445,16 @@ if __name__ == "__main__":
     # plt.scatter(data["AAPL"].index, labels_up, color='green')
     # plt.scatter(data["AAPL"].index, labels_down, color='red')
     # plt.show()
-    # dataset = ImageDataset(data, mode='subtract', window_len=20, space_between=1, enlarge_factor=1, interpolation_factor=1)
-    # print(len(data["AAPL"]), len(data["NVDA"]), len(data["META"]))
-    # # print(dataset[11214])
-    # print(len(dataset))
-    # k = 0
-    # for i, (image, label) in enumerate(tqdm(dataset)):
-    #     if i % 256 == 0:
-    #         plt.imshow(image.permute(1, 2, 0), aspect=1)
-    #         plt.tight_layout()
-    #         # plt.axis("off")
-    #         plt.show()
-    #         # plt.savefig("/Users/alavertu/Downloads/viz_repr_no_spectrum.png", dpi=400)
+    dataset = ImageDataset(data, mode='basic', p_quant=57, window_len=20, space_between=1, enlarge_factor=2, interpolation_factor=1, plt_fig=True)
+    print(len(data["AAPL"]), len(data["NVDA"]), len(data["META"]))
+    # print(dataset[11214])
+    print(len(dataset))
+    k = 0
+    for i, (image, label) in enumerate(tqdm(dataset)):
+        pass
+        # if i % 256 == 0:
+        #     plt.imshow(image.permute(1, 2, 0), aspect=1)
+        #     plt.tight_layout()
+        #     plt.axis("off")
+        #     plt.show()
+        #     # plt.savefig("/Users/alavertu/Downloads/viz_repr_no_spectrum.png", dpi=400)

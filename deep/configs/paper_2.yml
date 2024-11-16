@@ -12,6 +12,7 @@ data:
   enlarge_factor: 2
   interpolation_factor: 1
   offset: 1
+  plt_fig: False
 training:
   num_epochs: 20
   lr: 0.001
