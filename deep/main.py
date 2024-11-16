@@ -19,6 +19,7 @@ from experiments.experiment2 import experiment2
 parser.add_argument("--experiment", required=True, type=str)
 parser.add_argument("--config", required=True, type=str)
 parser.add_argument("--debug", action='store_true', default=False)
+parser.add_argument("--dataset", required=False, type=str, default="huge")
 parser.add_argument("--comment", required=False, type=str, default=None)
 parser.add_argument("--cpu", action="store_true", default=False)
 parser.add_argument("--noscaler", action="store_true", default=False)

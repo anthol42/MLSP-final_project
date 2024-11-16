@@ -24,9 +24,17 @@ metrics = {
 }
 
 def experiment2(args, kwargs):
-    pipe = Finviz("https://finviz.com/screener.ashx?v=111&f=ipodate_more5",True) | JSONCache() | \
-           FetchCharts(progress=True, throttle=1., auto_adjust=False) | \
-           Cache() | FilterNoneCharts() | RmTz() | CausalImpute()
+    if args.dataset == "huge":
+        pipe = Finviz("https://finviz.com/screener.ashx?v=111&f=ipodate_more5",True) | JSONCache() | \
+               FetchCharts(progress=True, throttle=1., auto_adjust=False) | \
+               Cache() | FilterNoneCharts() | RmTz() | CausalImpute()
+    elif args.dataset == "small":
+        pipe = Finviz("https://finviz.com/screener.ashx?v=111&f=cap_mega",True) | JSONCache() | \
+               FetchCharts(progress=True, throttle=1., auto_adjust=False) | \
+               Cache() | FilterNoneCharts() | RmTz() | CausalImpute()
+        pipe.set_id(10)
+    else:
+        raise ValueError(f"Invalid dataset: {args.dataset}")
 
     # Setup
     device = utils.get_device() if not args.cpu else "cpu"
