@@ -6,12 +6,16 @@ data:
   p_quant: 128
   window_len: 128
   random_seed: 42
+  space_between: 0
+  enlarge_factor: 1
+  interpolation_factor: 2
+  offset: 1
 training:
   num_epochs: 20
-  lr: 0.001
+  lr: 0.0001
   min_lr: 0.0005
-  weight_decay:  0.00005
+  weight_decay:  0.0
 model:
   model_dir: "saved_models"
   name: "ConvNeXt_small"
-  dropout: 0.5
+  dropout: 0.

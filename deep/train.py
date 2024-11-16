@@ -13,20 +13,19 @@ def train_one_epoch(dataloader, model, optimizer, criterion, epoch, device, feed
     for X, y in dataloader:
         # Setup - Copying to gpu if available
         X, y = X.to(device), y.to(device)
-
+        # for i in range(10_000):
+        optimizer.zero_grad()
         # Training with possibility of mixed precision
         if scaler:
             with torch.autocast(device_type=str(device), dtype=torch.float16):
                 pred = model(X)
                 loss = criterion(pred, y)
-            optimizer.zero_grad()
             scaler.scale(loss).backward()
             scaler.step(optimizer)
             scaler.update()
         else:
             pred = model(X)
             loss = criterion(pred, y)
-            optimizer.zero_grad()
             loss.backward()
             optimizer.step()
 
@@ -42,6 +41,8 @@ def train_one_epoch(dataloader, model, optimizer, criterion, epoch, device, feed
         if metrics is not None:
             for metric_name, metric_fn in metrics.items():
                 metr[metric_name] = metric_fn(targets, pred)
+
+            # print(f"{i} - Loss: {loss.item()}; {','.join(f'{metric}: {fn(targets, pred)}' for metric, fn in metrics.items())}")
         metr["loss"] = loss.item()
 
         # Report metrics
@@ -109,13 +110,13 @@ def validation_step(model, dataloader, criterion, epoch, device, feedback, metri
         State.writer.add_scalar(f'Valid/{metric_name}', counter.values().mean(), epoch)
     State.writer.add_scalar(f'Valid/Loss', lossCounter.values().mean(), epoch)
 
-def train(model, optimizer, train_loader, val_loader, criterion, num_epochs, device, config, scheduler=None, metrics: dict = None):
+def train(model, optimizer, train_loader, val_loader, criterion, num_epochs, device, config, scheduler=None, metrics: dict = None, noscaler: bool = False):
     State.global_step = 0
     # Checkpoints
     save_best_model = utils.SaveBestModel(
         config["model"]["model_dir"], metric_name="validation precision", model_name=config["model"]["name"],
         best_metric_val=float('-inf'), evaluation_method='MAX')
-    if str(device) == "cuda":
+    if str(device) == "cuda" and not noscaler:
         # For mixed precision training
         scaler = torch.amp.GradScaler()
     else:
@@ -172,7 +173,6 @@ def evaluate(model, dataloader, criterion, device, metrics: dict = None):
         for metric_name, value in metr.items():
             if metric_name in metrics_counter:
                 metrics_counter[metric_name](value)
-
         # Display metrics
         feedback(
             loss=lossCounter,

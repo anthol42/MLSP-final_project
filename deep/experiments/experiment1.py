@@ -90,7 +90,8 @@ def experiment1(args, kwargs):
         device=device,
         scheduler=scheduler,
         config=config,
-        metrics=metrics
+        metrics=metrics,
+        noscaler=args.noscaler
     )
     # Test
     results = evaluate(model, test_loader, loss, device, metrics=metrics)
