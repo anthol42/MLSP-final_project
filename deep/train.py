@@ -106,9 +106,13 @@ def validation_step(model, dataloader, criterion, epoch, device, feedback, metri
     print()
 
     # Report epochs metrics
+    last_valid = {}
     for metric_name, counter in metrics_counter.items():
         State.writer.add_scalar(f'Valid/{metric_name}', counter.values().mean(), epoch)
+        last_valid[metric_name] = counter.values().mean()
     State.writer.add_scalar(f'Valid/Loss', lossCounter.values().mean(), epoch)
+    last_valid["loss"] = lossCounter.values().mean()
+    State.last_valid = last_valid
 
 def train(model, optimizer, train_loader, val_loader, criterion, num_epochs, device, config, scheduler=None, metrics: dict = None, noscaler: bool = False):
     State.global_step = 0
@@ -138,8 +142,7 @@ def train(model, optimizer, train_loader, val_loader, criterion, num_epochs, dev
         )
 
         # Checkpoint
-        val_precision = State.writer["Valid/precision"]["value"].values
-        save_best_model(val_precision[epoch], epoch, model, optimizer, criterion)
+        save_best_model(State.last_valid["precision"], epoch, model, optimizer, criterion)
 
 @torch.inference_mode()
 def evaluate(model, dataloader, criterion, device, metrics: dict = None):

@@ -33,3 +33,4 @@ torchinfo
 tensorboard
 tqdm
 backtest-pro
+opencv-python
