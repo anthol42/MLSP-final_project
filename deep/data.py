@@ -16,6 +16,7 @@ import mplfinance as mpf
 import matplotlib as mpl
 import io
 import cv2
+import os
 mpl.rcParams['savefig.pad_inches'] = 0
 mc = mpf.make_marketcolors(up='#00FF00', down='#FF0000',
                            wick="#999999",
@@ -133,7 +134,7 @@ def gen_image(chart: np.ndarray, p_quant = 128, mode='substract', decay: float =
 def gen_plt_image(chart: np.ndarray) -> torch.Tensor:
     chart = pd.DataFrame(chart[:, :5], columns=["Open", "High", "Low", "Close", "Volume"],
                          index=pd.date_range("2020-01-01", periods=len(chart), freq='D'))
-    fig, ax = mpf.plot(chart, type='candle', style=s,
+    fig, ax = mpf.plot(chart, type='candle', style=s, block=False,
                        volume=False, ylabel='Price', ylabel_lower='Volume', figsize=(1, 1),
                        returnfig=True, axisoff=True, tight_layout=True, scale_padding=0.)
     io_buf = io.BytesIO()
@@ -231,7 +232,7 @@ class ImageDataset(Dataset):
     LABELS = ["DOWN", "UP", "NEUTRAL"]
     def __init__(self, data: Dict[str, pd.DataFrame], p_quant: int = 128, window_len: int = 256, mode: str = 'subtract', tickers: Optional[Set[str]] = None,
                  random_seed: Optional[int] = None, space_between: int = 0, enlarge_factor: int = 1,
-                 interpolation_factor: int = 2, annotation_type: str = 'default', offset: int = 1, plt_fig: bool = False):
+                 interpolation_factor: int = 2, annotation_type: str = 'default', offset: int = 1, plt_fig: bool = False, name: str = "train"):
         """
         :param data: The data fetched from the data pipeline
         :param p_quant: The precision of the quantification (Number of bins or height of the image)
@@ -262,6 +263,29 @@ class ImageDataset(Dataset):
             self.offsets, self.data = self.process_data_change_annotation(data, window_len, offset)
         else:
             raise ValueError(f"Unknown annotation type: {annotation_type}")
+
+        if plt_fig:
+            if not os.path.exists(f".cache/{name}_plt_cache.npy"):
+                self.plt_cache = self.cache_plt()
+                np.save(f".cache/{name}_plt_cache.npy", self.plt_cache)
+            else:
+                print("Loading plt cache")
+                self.plt_cache = np.load(f".cache/{name}_plt_cache.npy")
+
+    def cache_plt(self):
+        h = self.p_quant * self.interpolation_factor
+        w = self.interpolation_factor * (self.window_len * self.enlarge_factor + self.space_between * (self.window_len - 1))
+        out = np.empty((len(self), 3, h, w), dtype=np.uint8)
+        for idx in tqdm(range(len(self)), desc="Rendering plt images"):
+            # Get coordinates
+            chart_idx = np.argmin(idx > self.offsets[1:])
+            i = idx - self.offsets[chart_idx] - 1
+            # Return the processed sample and the label
+            chart, labels = self.data[chart_idx]
+            window = chart[i:i + self.window_len]
+            out[idx] = self.process_plt(window, (h, w))
+
+        return out
 
     @staticmethod
     def sample_data(data: Dict[str, pd.DataFrame], tickers: Set[str]) -> Dict[str, pd.DataFrame]:
@@ -322,9 +346,9 @@ class ImageDataset(Dataset):
         chart, labels = self.data[chart_idx]
         window = chart[i:i + self.window_len]
         if self.plt_fig:
-            width = self.interpolation_factor * (len(window) * self.enlarge_factor + self.space_between * (len(window) - 1))
-            return (self.process_plt(window, (self.p_quant * self.interpolation_factor, width)),
-                    torch.tensor(labels[i + self.window_len - 1]).long())
+            img = self.plt_cache[idx]
+            img = torch.from_numpy(img).float() / 255
+            return img, torch.tensor(labels[i + self.window_len - 1]).long()
         else:
             return (self.process(window, self.p_quant, self.mode, self.space_between, self.enlarge_factor, self.interpolation_factor),
                 torch.tensor(labels[i + self.window_len - 1]).long())
@@ -346,7 +370,7 @@ class ImageDataset(Dataset):
         return image.float()
 
     @staticmethod
-    def process_plt(window: torch.Tensor, out_size: Tuple[int, int]) -> torch.Tensor:
+    def process_plt(window: torch.Tensor, out_size: Tuple[int, int]) -> npt.NDArray[np.uint8]:
         """
         Render the window chart as an image using matplotlib
         :param window: The window to process
@@ -355,7 +379,7 @@ class ImageDataset(Dataset):
         """
         image = gen_plt_image(window.numpy())
         image = F.interpolate(image.unsqueeze(0), size=out_size, mode='bilinear').squeeze(0)
-        return image.float()
+        return (image.numpy() * 255).astype(np.uint8)
 
     def __len__(self):
         return self.offsets[-2] + 1   # Last one is just padding to avoid overflow in indexing algorithm
@@ -372,6 +396,7 @@ def split_data(data: Dict[str, pd.DataFrame], start: datetime, end: datetime) ->
     for name, chart in data.items():
         out[name] = chart.loc[start.date():end.date()]
     return out
+
 def make_dataloader(config, pipe: DataPipe, start: datetime, train_end: datetime, val_end: datetime, test_end: datetime,
                     fract: float = 1., annotation_type: str = "default"):
     # Step 1: Fetch the data
@@ -396,7 +421,8 @@ def make_dataloader(config, pipe: DataPipe, start: datetime, train_end: datetime
                             interpolation_factor=config["data"]["interpolation_factor"],
                             annotation_type=annotation_type,
                             offset=config["data"]["offset"],
-                            plt_fig=config["data"]["plt_fig"]
+                            plt_fig=config["data"]["plt_fig"],
+                            name="train"
                             )
     val_ds = ImageDataset(val_data, mode=config["data"]["mode"], p_quant=config["data"]["p_quant"],
                           window_len=config["data"]["window_len"], tickers=tickers,
@@ -406,7 +432,8 @@ def make_dataloader(config, pipe: DataPipe, start: datetime, train_end: datetime
                             interpolation_factor=config["data"]["interpolation_factor"],
                             annotation_type=annotation_type,
                             offset=config["data"]["offset"],
-                            plt_fig=config["data"]["plt_fig"]
+                            plt_fig=config["data"]["plt_fig"],
+                          name="val"
                           )
     test_ds = ImageDataset(test_data, mode=config["data"]["mode"], p_quant=config["data"]["p_quant"],
                            window_len=config["data"]["window_len"], tickers=tickers,
@@ -416,7 +443,8 @@ def make_dataloader(config, pipe: DataPipe, start: datetime, train_end: datetime
                             interpolation_factor=config["data"]["interpolation_factor"],
                             annotation_type=annotation_type,
                             offset=config["data"]["offset"],
-                            plt_fig=config["data"]["plt_fig"]
+                            plt_fig=config["data"]["plt_fig"],
+                           name="test"
                            )
 
     # Step 4: Initialize the dataloaders

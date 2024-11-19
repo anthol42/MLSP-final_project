@@ -61,8 +61,8 @@ def experiment1(args, kwargs):
     train_loader, val_loader, test_loader = make_dataloader(config=config, pipe=pipe,
                                                             start=datetime(2000, 1, 1),
                                                             train_end=datetime(2016, 12, 31),
-                                                            val_end=datetime(2019, 12, 13),
-                                                            test_end=datetime(2024, 1, 1), fract=args.fract)
+                                                            val_end=datetime(2018, 6, 13),
+                                                            test_end=datetime(2020, 1, 1), fract=args.fract)
     print("Data loaded successfully!")
 
     # Loading the model

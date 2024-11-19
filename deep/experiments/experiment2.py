@@ -9,7 +9,7 @@ import shutil
 import utils
 from utils import State, Reporter, Table
 from backtest.data import JSONCache, FetchCharts, Cache, FilterNoneCharts, CausalImpute
-from pipes import Finviz, RmTz
+from pipes import Finviz, RmTz, FromFile
 from torchinfo import summary
 from datetime import datetime
 from metrics import custom_precision, accuracy, precision_2d
@@ -29,7 +29,7 @@ def experiment2(args, kwargs):
                FetchCharts(progress=True, throttle=1., auto_adjust=False) | \
                Cache() | FilterNoneCharts() | RmTz() | CausalImpute()
     elif args.dataset == "small":
-        pipe = Finviz("https://finviz.com/screener.ashx?v=111&f=cap_mega",True) | JSONCache() | \
+        pipe = FromFile("tw50.json") | JSONCache() | \
                FetchCharts(progress=True, throttle=1., auto_adjust=False) | \
                Cache() | FilterNoneCharts() | RmTz() | CausalImpute()
         pipe.set_id(10)
@@ -69,8 +69,8 @@ def experiment2(args, kwargs):
     train_loader, val_loader, test_loader = make_dataloader(config=config, pipe=pipe,
                                                             start=datetime(2000, 1, 1),
                                                             train_end=datetime(2016, 12, 31),
-                                                            val_end=datetime(2019, 12, 13),
-                                                            test_end=datetime(2024, 1, 1),
+                                                            val_end=datetime(2018, 6, 13),
+                                                            test_end=datetime(2020, 1, 1),
                                                             fract=args.fract, annotation_type="change")
     print("Data loaded successfully!")
 
