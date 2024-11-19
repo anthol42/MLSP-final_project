@@ -101,6 +101,10 @@ def experiment2(args, kwargs):
         config=config,
         metrics=metrics
     )
+    # Load best model
+    print("Loading best model")
+    weights = torch.load(f'{config["model"]["model_dir"]}/{config["model"]["name"]}.pth', weights_only=False)["model_state_dict"]
+    model.load_state_dict(weights)
     # Test
     results = evaluate(model, test_loader, loss, device, metrics=metrics)
     print("Training done!  Saving...")
