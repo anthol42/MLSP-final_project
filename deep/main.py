@@ -24,6 +24,8 @@ parser.add_argument("--comment", required=False, type=str, default=None)
 parser.add_argument("--cpu", action="store_true", default=False)
 parser.add_argument("--noscaler", action="store_true", default=False)
 parser.add_argument("--fract", required=False, type=float, default=1.) # Fraction of dataset
+parser.add_argument("--watch", required=False, type=str, default="precision")
+parser.add_argument("--task", required=False, type=str, default="predictive") # Predictive, ud or count
 
 
 # ######################################################################################################################

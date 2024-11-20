@@ -114,12 +114,15 @@ def validation_step(model, dataloader, criterion, epoch, device, feedback, metri
     last_valid["loss"] = lossCounter.values().mean()
     State.last_valid = last_valid
 
-def train(model, optimizer, train_loader, val_loader, criterion, num_epochs, device, config, scheduler=None, metrics: dict = None, noscaler: bool = False):
+def train(model, optimizer, train_loader, val_loader, criterion, num_epochs, device, config, scheduler=None,
+          metrics: dict = None, noscaler: bool = False, watch: str = "precision"):
     State.global_step = 0
     # Checkpoints
+    m, b = ("MIN", float("inf")) if watch == "loss" else ("MAX", float('-inf'))
+    print(f"Watching: {watch}")
     save_best_model = utils.SaveBestModel(
-        config["model"]["model_dir"], metric_name="validation precision", model_name=config["model"]["name"],
-        best_metric_val=float('-inf'), evaluation_method='MAX')
+        config["model"]["model_dir"], metric_name=f"validation {watch}", model_name=config["model"]["name"],
+        best_metric_val=b, evaluation_method=m)
     if str(device) == "cuda" and not noscaler:
         # For mixed precision training
         scaler = torch.amp.GradScaler()
@@ -142,7 +145,7 @@ def train(model, optimizer, train_loader, val_loader, criterion, num_epochs, dev
         )
 
         # Checkpoint
-        save_best_model(State.last_valid["precision"], epoch, model, optimizer, criterion)
+        save_best_model(State.last_valid[watch], epoch, model, optimizer, criterion)
 
 @torch.inference_mode()
 def evaluate(model, dataloader, criterion, device, metrics: dict = None):

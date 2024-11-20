@@ -71,7 +71,7 @@ def experiment2(args, kwargs):
                                                             train_end=datetime(2016, 12, 31),
                                                             val_end=datetime(2018, 6, 13),
                                                             test_end=datetime(2020, 1, 1),
-                                                            fract=args.fract, annotation_type="change")
+                                                            fract=args.fract, annotation_type="change", task=args.task)
     print("Data loaded successfully!")
 
     # Loading the model
@@ -99,7 +99,8 @@ def experiment2(args, kwargs):
         device=device,
         scheduler=scheduler,
         config=config,
-        metrics=metrics
+        metrics=metrics,
+        watch=args.watch
     )
     # Load best model
     print("Loading best model")

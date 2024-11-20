@@ -206,12 +206,14 @@ def annotate_tickers(chart: np.ndarray, WINDOW_SIZE = 14):
     annotations = add_neutral_v2(annotations, dur=7)
     return annotations
 
-def annotate_chart_change(chart: np.ndarray, offset = 1):
+def annotate_chart_change(chart: np.ndarray, offset = 1, predictive: bool = True):
     today = chart[:-offset]
     next_day = chart[offset:]
     classes = (next_day[:, 3] > today[:, 3]).astype(int)
-    return np.concatenate([classes, [np.nan] * offset])
-
+    if predictive:
+        return np.concatenate([classes, [np.nan] * offset])
+    else:
+        return np.concatenate([[np.nan] * offset, classes])
 def sample_tickers(data: Dict[str, pd.DataFrame], fract: float, seed: Optional[int] = None) -> Set[str]:
     """
     Sample a fraction of the given data. Sample across stocks (Ex: keep 42 stocks out of 400)
@@ -232,7 +234,8 @@ class ImageDataset(Dataset):
     LABELS = ["DOWN", "UP", "NEUTRAL"]
     def __init__(self, data: Dict[str, pd.DataFrame], p_quant: int = 128, window_len: int = 256, mode: str = 'subtract', tickers: Optional[Set[str]] = None,
                  random_seed: Optional[int] = None, space_between: int = 0, enlarge_factor: int = 1,
-                 interpolation_factor: int = 2, annotation_type: str = 'default', offset: int = 1, plt_fig: bool = False, name: str = "train"):
+                 interpolation_factor: int = 2, annotation_type: str = 'default', offset: int = 1, plt_fig: bool = False, name: str = "train",
+                 task: str = "predictive"):
         """
         :param data: The data fetched from the data pipeline
         :param p_quant: The precision of the quantification (Number of bins or height of the image)
@@ -246,6 +249,7 @@ class ImageDataset(Dataset):
         :param annotation_type: The type of annotation to use (default or change)
         :param offset: The number of day in the future to to use in the change annotation (Used only if annotation_type is change)
         :param plt_fig: If True, the image is generated using matplotlib renderer instead of the custom one
+        :param task: The task that the model need to perform
         """
         self.p_quant = p_quant
         self.window_len = window_len
@@ -254,13 +258,14 @@ class ImageDataset(Dataset):
         self.enlarge_factor = enlarge_factor
         self.interpolation_factor = interpolation_factor
         self.plt_fig = plt_fig
+        self.task = task
         if tickers is not None:
             data = self.sample_data(data, tickers)
 
         if annotation_type == 'default':
             self.offsets, self.data = self.process_data(data, window_len)
         elif annotation_type == 'change':
-            self.offsets, self.data = self.process_data_change_annotation(data, window_len, offset)
+            self.offsets, self.data = self.process_data_change_annotation(data, window_len, offset, predictive=self.task == "predictive")
         else:
             raise ValueError(f"Unknown annotation type: {annotation_type}")
 
@@ -320,20 +325,22 @@ class ImageDataset(Dataset):
         return offsets, out_data
 
     @staticmethod
-    def process_data_change_annotation(data: Dict[str, pd.DataFrame], window_len, offset: int = 1) -> Tuple[np.ndarray, List[torch.Tensor]]:
+    def process_data_change_annotation(data: Dict[str, pd.DataFrame], window_len, offset: int = 1, predictive: bool = True) -> Tuple[np.ndarray, List[torch.Tensor]]:
         """
         Process the data into the format we want and generate the index
         :param data: The raw data to process
         :param window_len: The length of the window
         :return: The index, the processed data
         """
+        if not predictive:
+            print("PERFORMING AUXILIARY TASK: Not predictive")
         offsets = [-1]
         out_data = []
         for name, chart in tqdm(data.items()):
             if len(chart) > window_len + offset + 1:
                 offsets.append(len(chart) - window_len - offset + 1)
                 out_data.append((torch.from_numpy(chart.values[:-offset]),
-                                 annotate_chart_change(chart.values, offset)[:-offset]))
+                                 annotate_chart_change(chart.values, offset, predictive=predictive)[:-offset]))
         offsets.append(offsets[-1] + 1)
         offsets = np.cumsum(offsets)
         return offsets, out_data
@@ -345,13 +352,28 @@ class ImageDataset(Dataset):
         # Return the processed sample and the label
         chart, labels = self.data[chart_idx]
         window = chart[i:i + self.window_len]
+        label = torch.tensor(labels[i + self.window_len - 1]).long()
+        if self.task == "count":
+            label = self.get_count_label(window)
         if self.plt_fig:
             img = self.plt_cache[idx]
             img = torch.from_numpy(img).float() / 255
-            return img, torch.tensor(labels[i + self.window_len - 1]).long()
+            return img, label
         else:
             return (self.process(window, self.p_quant, self.mode, self.space_between, self.enlarge_factor, self.interpolation_factor),
-                torch.tensor(labels[i + self.window_len - 1]).long())
+                label)
+
+    @staticmethod
+    def get_count_label(chart):
+        """
+        Compute the number of green bar on the total number of bars. If there is more green bars than red ones, the
+        label is 1. 0 otherwise
+        :param chart: The chart shape(N, 5)
+        :return: A long 0 or 1
+        """
+        green = chart[:, 0] <= chart[:, 3] # Candle is green if the open price is smaller or equal to the close price
+        ratio = green.int().sum() / len(chart)
+        return (ratio > 0.5).long()
 
     @staticmethod
     def process(window: torch.Tensor, p_quant: int, mode: str, space_between: int, enlarge_factor: int, interpolation_factor: int) -> torch.Tensor:
@@ -398,7 +420,7 @@ def split_data(data: Dict[str, pd.DataFrame], start: datetime, end: datetime) ->
     return out
 
 def make_dataloader(config, pipe: DataPipe, start: datetime, train_end: datetime, val_end: datetime, test_end: datetime,
-                    fract: float = 1., annotation_type: str = "default"):
+                    fract: float = 1., annotation_type: str = "default", task: str = "predictive"):
     # Step 1: Fetch the data
     data = pipe.get(start, test_end)
 
@@ -422,7 +444,8 @@ def make_dataloader(config, pipe: DataPipe, start: datetime, train_end: datetime
                             annotation_type=annotation_type,
                             offset=config["data"]["offset"],
                             plt_fig=config["data"]["plt_fig"],
-                            name="train"
+                            name="train",
+                            task=task
                             )
     val_ds = ImageDataset(val_data, mode=config["data"]["mode"], p_quant=config["data"]["p_quant"],
                           window_len=config["data"]["window_len"], tickers=tickers,
@@ -433,7 +456,8 @@ def make_dataloader(config, pipe: DataPipe, start: datetime, train_end: datetime
                             annotation_type=annotation_type,
                             offset=config["data"]["offset"],
                             plt_fig=config["data"]["plt_fig"],
-                          name="val"
+                            name="val",
+                            task=task
                           )
     test_ds = ImageDataset(test_data, mode=config["data"]["mode"], p_quant=config["data"]["p_quant"],
                            window_len=config["data"]["window_len"], tickers=tickers,
@@ -444,7 +468,8 @@ def make_dataloader(config, pipe: DataPipe, start: datetime, train_end: datetime
                             annotation_type=annotation_type,
                             offset=config["data"]["offset"],
                             plt_fig=config["data"]["plt_fig"],
-                           name="test"
+                            name="test",
+                            task=task
                            )
 
     # Step 4: Initialize the dataloaders
