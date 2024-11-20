@@ -44,12 +44,13 @@ most human would get really good results at this task too.
 **Failure case**: We do not think of any failure cases for this task *a priori*
 
 ## Runs
-| RunID | Command | Objective                                                                                           |
-|-------|-|-----------------------------------------------------------------------------------------------------|
-| 10    |```python main.py --experiment=experiment2 --config=configs/paper_2.yml --dataset="small" --config.data.plt_fig=True```| Try to reproduce the paper's results. We have the same model, task and dataset AKA: same conditions |
-| 11    |```python main.py --experiment=experiment2 --config=configs/paper_2.yml --dataset="small"```| Implement the paper's metho, but with our image representation (Faster)                             |
-| 13    |```python main.py --experiment=experiment2 --config=configs/paper_2.yml --dataset="small" --task="ud"``` | Test the up/down task with the paper model on the taiwan dataset                                    |
-| 15    |```python main.py --experiment=experiment2 --config=configs/paper_2.yml --dataset="small" --task="count"```| Test the count task with the paper model on the taiwan dataset                                      |
+| RunID | Command | Objective                                                                                                          |
+|-------|-|--------------------------------------------------------------------------------------------------------------------|
+| 10    |```python main.py --experiment=experiment2 --config=configs/paper_2.yml --dataset="small" --config.data.plt_fig=True```| Try to reproduce the paper's results. We have the same model, task and dataset AKA: same conditions                |
+| 11    |```python main.py --experiment=experiment2 --config=configs/paper_2.yml --dataset="small"```| Implement the paper's metho, but with our image representation (Faster)                                            |
+| 13    |```python main.py --experiment=experiment2 --config=configs/paper_2.yml --dataset="small" --task="ud"``` | Test the up/down task with the paper model on the taiwan dataset                                                   |
+| 15    |```python main.py --experiment=experiment2 --config=configs/paper_2.yml --dataset="small" --task="count"```| Test the count task with the paper model on the taiwan dataset                                                     |
+| 16    |```python main.py --experiment=experiment2 --config=configs/paper_2.yml --dataset="smallUS" --config.training.lr=0.0001 --watch=accuracy``` | Test the paper model on the 50 most valuable US comnpagnies. (Analog to #11, but with us stocks instead of taiwan) |
 
 
 ## Results

@@ -47,7 +47,7 @@ def from_name(config, annotation_type: str = "default"):
         out_feat = model.classifier[-1].in_features
         model.classifier = nn.Sequential(
             nn.Dropout(p=config["model"]["dropout"], inplace=True),
-            nn.Linear(out_feat, 3),
+            nn.Linear(out_feat, n_class),
         )
     elif name == "EfficientNetV2_m":
         model = torchvision.models.efficientnet_v2_m(weights=torchvision.models.EfficientNet_V2_M_Weights.IMAGENET1K_V1)
