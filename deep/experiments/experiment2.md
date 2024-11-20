@@ -18,6 +18,9 @@ stock market is more liquid, which could make prediction harder, but more profit
 (See if it is the model the problem, or the task. *i.e. predicting the future*)
 4. Test on US stocks (50 biggest stocks by market cap)
    - Note: We need a 5x smaller learning rate for the model (paper) to converge
+5. Test on US50 and TW50 with another, bigger, model.
+   - Note: It over fits shit ton
+6. Try on a bigger dataset (randomly sample 10% of US stocks that existed before 2017-01-01). To keep the task fair, we scaled the valid and test set accordingly
 
 ### Task 1: Up or Down (*ud*)
 This first task aim to test if the model can understand basic patterns. The goal of this task is to accurately affirm 
@@ -44,13 +47,15 @@ most human would get really good results at this task too.
 **Failure case**: We do not think of any failure cases for this task *a priori*
 
 ## Runs
-| RunID | Command | Objective                                                                                                          |
-|-------|-|--------------------------------------------------------------------------------------------------------------------|
-| 10    |```python main.py --experiment=experiment2 --config=configs/paper_2.yml --dataset="small" --config.data.plt_fig=True```| Try to reproduce the paper's results. We have the same model, task and dataset AKA: same conditions                |
-| 11    |```python main.py --experiment=experiment2 --config=configs/paper_2.yml --dataset="small"```| Implement the paper's metho, but with our image representation (Faster)                                            |
-| 13    |```python main.py --experiment=experiment2 --config=configs/paper_2.yml --dataset="small" --task="ud"``` | Test the up/down task with the paper model on the taiwan dataset                                                   |
-| 15    |```python main.py --experiment=experiment2 --config=configs/paper_2.yml --dataset="small" --task="count"```| Test the count task with the paper model on the taiwan dataset                                                     |
-| 16    |```python main.py --experiment=experiment2 --config=configs/paper_2.yml --dataset="smallUS" --config.training.lr=0.0001 --watch=accuracy``` | Test the paper model on the 50 most valuable US comnpagnies. (Analog to #11, but with us stocks instead of taiwan) |
+| RunID | Command | Objective                                                                                                         |
+|-------|-|-------------------------------------------------------------------------------------------------------------------|
+| 10    |```python main.py --experiment=experiment2 --config=configs/paper_2.yml --dataset="small" --config.data.plt_fig=True```| Try to reproduce the paper's results. We have the same model, task and dataset AKA: same conditions               |
+| 11    |```python main.py --experiment=experiment2 --config=configs/paper_2.yml --dataset="small"```| Implement the paper's metho, but with our image representation (Faster)                                           |
+| 13    |```python main.py --experiment=experiment2 --config=configs/paper_2.yml --dataset="small" --task="ud"``` | Test the up/down task with the paper model on the taiwan dataset                                                  |
+| 15    |```python main.py --experiment=experiment2 --config=configs/paper_2.yml --dataset="small" --task="count"```| Test the count task with the paper model on the taiwan dataset                                                    |
+| 16    |```python main.py --experiment=experiment2 --config=configs/paper_2.yml --dataset="smallUS" --config.training.lr=0.0001 --watch=accuracy``` | Test the paper model on the 50 most valuable US compagnies. (Analog to #11, but with us stocks instead of taiwan) |
+| 17    |```python main.py --experiment=experiment2 --config=configs/E_s2.yml --dataset="smallUS" --config.training.lr=0.0001 --watch=accuracy``` | Test the EfficientNetV2 small model on the 50 most valuable US compagnies (Analog to #16) |
+| 18    | ```python main.py --experiment=experiment2 --config=configs/E_s2.yml --dataset="small" --config.training.lr=0.0001 --watch=accuracy``` | Test the EfficientNetV2 small model on TW50 stocks. (Analog to #11, but with EfficientNet)
 
 
 ## Results

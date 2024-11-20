@@ -25,7 +25,7 @@ metrics = {
 
 def experiment2(args, kwargs):
     if args.dataset == "huge":
-        pipe = Finviz("https://finviz.com/screener.ashx?v=111&f=ipodate_more5",True) | JSONCache() | \
+        pipe = Finviz("https://finviz.com/screener.ashx?v=111&f=ipodate_more10",True) | JSONCache() | \
                FetchCharts(progress=True, throttle=1., auto_adjust=False) | \
                Cache() | FilterNoneCharts() | RmTz() | CausalImpute()
     elif args.dataset == "small":
