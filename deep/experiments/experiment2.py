@@ -33,6 +33,11 @@ def experiment2(args, kwargs):
                FetchCharts(progress=True, throttle=1., auto_adjust=False) | \
                Cache() | FilterNoneCharts() | RmTz() | CausalImpute()
         pipe.set_id(10)
+    elif args.dataset == "smallUS":
+        pipe = FromFile("us50.json") | JSONCache() | \
+               FetchCharts(progress=True, throttle=1., auto_adjust=False) | \
+               Cache() | FilterNoneCharts() | RmTz() | CausalImpute()
+        pipe.set_id(10)
     else:
         raise ValueError(f"Invalid dataset: {args.dataset}")
 

@@ -12,8 +12,8 @@ data:
   offset: 1
 training:
   num_epochs: 20
-  lr: 0.001
-  min_lr: 0.0005
+  lr: 0.0005
+  min_lr: 0.00005
   weight_decay:  0.00005
 model:
   model_dir: "saved_models"

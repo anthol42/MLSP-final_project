@@ -16,7 +16,8 @@ stock market is more liquid, which could make prediction harder, but more profit
 2. We try with another visual representation (Our custom renderer about 1000x faster)
 3. We try different non-predictive tasks to verify if our architectures are able to recognise pattern in the images 
 (See if it is the model the problem, or the task. *i.e. predicting the future*)
-4. TODO: Test on US stocks (50 biggest stocks by market cap)
+4. Test on US stocks (50 biggest stocks by market cap)
+   - Note: We need a 5x smaller learning rate for the model (paper) to converge
 
 ### Task 1: Up or Down (*ud*)
 This first task aim to test if the model can understand basic patterns. The goal of this task is to accurately affirm 
@@ -27,7 +28,7 @@ human would be really good at this task, like a human is really good at classify
 (0: The price is lower; 1: The price is higher)
 
 **Failure case**: When there is really low or no volatility, the prices might stay the same, or almost the same. Because 
-the visual representation of the image consist of quantized prices, small prices movment are aligned on the same pixel 
+the visual representation of the image consist of quantized prices, small prices movement are aligned on the same pixel 
 row, meaning that the model cannot see the difference. In those cases, the model cannot guess if the price went up or 
 down.
 
