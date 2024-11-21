@@ -37,7 +37,7 @@ def experiment2(args, kwargs):
         pipe = FromFile("us50.json") | JSONCache() | \
                FetchCharts(progress=True, throttle=1., auto_adjust=False) | \
                Cache() | FilterNoneCharts() | RmTz() | CausalImpute()
-        pipe.set_id(10)
+        pipe.set_id(20)
     else:
         raise ValueError(f"Invalid dataset: {args.dataset}")
 
@@ -94,19 +94,23 @@ def experiment2(args, kwargs):
                                                            eta_min=config["training"]["min_lr"])
     # Training
     print("Begining training...")
-    train(
-        model=model,
-        optimizer=optimizer,
-        train_loader=train_loader,
-        val_loader=val_loader,
-        criterion=loss,
-        num_epochs=config["training"]["num_epochs"],
-        device=device,
-        scheduler=scheduler,
-        config=config,
-        metrics=metrics,
-        watch=args.watch
-    )
+    try:
+        train(
+            model=model,
+            optimizer=optimizer,
+            train_loader=train_loader,
+            val_loader=val_loader,
+            criterion=loss,
+            num_epochs=config["training"]["num_epochs"],
+            device=device,
+            scheduler=scheduler,
+            config=config,
+            metrics=metrics,
+            watch=args.watch
+        )
+    except KeyboardInterrupt:
+        print("\nInterrupt detected. Ending training...\n")
+
     # Load best model
     print("Loading best model")
     weights = torch.load(f'{config["model"]["model_dir"]}/{config["model"]["name"]}.pth', weights_only=False)["model_state_dict"]
