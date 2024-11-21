@@ -235,7 +235,7 @@ class ImageDataset(Dataset):
     def __init__(self, data: Dict[str, pd.DataFrame], p_quant: int = 128, window_len: int = 256, mode: str = 'subtract', tickers: Optional[Set[str]] = None,
                  random_seed: Optional[int] = None, space_between: int = 0, enlarge_factor: int = 1,
                  interpolation_factor: int = 2, annotation_type: str = 'default', offset: int = 1, plt_fig: bool = False, name: str = "train",
-                 task: str = "predictive"):
+                 task: str = "predictive", group_size: int = 1):
         """
         :param data: The data fetched from the data pipeline
         :param p_quant: The precision of the quantification (Number of bins or height of the image)
@@ -250,6 +250,7 @@ class ImageDataset(Dataset):
         :param offset: The number of day in the future to to use in the change annotation (Used only if annotation_type is change)
         :param plt_fig: If True, the image is generated using matplotlib renderer instead of the custom one
         :param task: The task that the model need to perform
+        :param group_size: The number of point that are grouped together to make a single new point. (Used for downsampling)
         """
         self.p_quant = p_quant
         self.window_len = window_len
@@ -259,15 +260,19 @@ class ImageDataset(Dataset):
         self.interpolation_factor = interpolation_factor
         self.plt_fig = plt_fig
         self.task = task
+        self.group_size = group_size
         if tickers is not None:
             data = self.sample_data(data, tickers)
 
         if annotation_type == 'default':
-            self.offsets, self.data = self.process_data(data, window_len)
+            self.offsets, self.data = self.process_data(data, window_len, self.group_size)
         elif annotation_type == 'change':
-            self.offsets, self.data = self.process_data_change_annotation(data, window_len, offset, predictive=self.task == "predictive")
+            self.offsets, self.data = self.process_data_change_annotation(data, window_len, offset, predictive=self.task == "predictive", group_size=self.group_size)
         else:
             raise ValueError(f"Unknown annotation type: {annotation_type}")
+
+        # Get the true window length
+        self.window_len = self.window_len // self.group_size
 
         if plt_fig:
             if not os.path.exists(f".cache/{name}_plt_cache.npy"):
@@ -293,6 +298,27 @@ class ImageDataset(Dataset):
         return out
 
     @staticmethod
+    def group(chart: np.ndarray, group_size: int):
+        """
+        Group the chart into groups of size group_size (OHLCV format). The length of the chart must be divisible by the
+        group_size.
+        :param chart: The chart array
+        :param group_size: The number of point that are grouped together to make a single new point.
+        :return:
+        """
+        if chart.shape[0] % group_size != 0:
+            raise ValueError(f"Chart length ({chart.shape[0]}) is not divisible by group_size ({group_size})")
+        a = chart[:, :5].reshape((-1, group_size, 5))
+        ohlc = np.column_stack((
+            a[:, 0, 0],  # Open: first element of each group
+            a[:, :, 1].max(axis=1),  # High: maximum of each group
+            a[:, :, 2].min(axis=1),  # Low: minimum of each group
+            a[:, -1, 3],  # Close: last element of each group
+            a[:, :, 4].sum(axis=1)  # Volume: last element of each group
+        ))
+        return ohlc
+
+    @staticmethod
     def sample_data(data: Dict[str, pd.DataFrame], tickers: Set[str]) -> Dict[str, pd.DataFrame]:
         """
         Sample a fraction of the given data. Sample across stocks (Ex: keep 42 stocks out of 400)
@@ -305,8 +331,7 @@ class ImageDataset(Dataset):
         return {ticker: data[ticker] for ticker in tickers}
 
 
-    @staticmethod
-    def process_data(data: Dict[str, pd.DataFrame], window_len) -> Tuple[np.ndarray, List[torch.Tensor]]:
+    def process_data(self, data: Dict[str, pd.DataFrame], window_len, group_size: int = 1) -> Tuple[np.ndarray, List[torch.Tensor]]:
         """
         Process the data into the format we want and generate the index
         :param data: The raw data to process
@@ -315,33 +340,46 @@ class ImageDataset(Dataset):
         """
         offsets = [-1]
         out_data = []
+        effective_window_len = window_len // group_size
         for name, chart in tqdm(data.items()):
             chart = chart[["Open", "High", "Low", "Close", "Volume"]]
             if len(chart) > window_len + 4 * WINDOW_SIZE + 1:
-                offsets.append(len(chart) - window_len - 4 * WINDOW_SIZE + 1)
-                out_data.append((torch.from_numpy(chart.values[2 * WINDOW_SIZE:-2 * WINDOW_SIZE]),
-                                 annotate_tickers(chart.values, WINDOW_SIZE)[2 * WINDOW_SIZE:-2 * WINDOW_SIZE]))
+                chart = chart.values
+                if group_size > 1:
+                    exploitable_len = (len(chart) // group_size) * group_size
+                    chart = self.group(chart[-exploitable_len:], group_size)
+                offsets.append(len(chart) - effective_window_len - 4 * WINDOW_SIZE + 1)
+                out_data.append((torch.from_numpy(chart[2 * WINDOW_SIZE:-2 * WINDOW_SIZE]),
+                                 annotate_tickers(chart, WINDOW_SIZE)[2 * WINDOW_SIZE:-2 * WINDOW_SIZE]))
         offsets.append(offsets[-1] + 1)    # To avoid an overflow in the indexing algorithm where all offset are passed
         offsets = np.cumsum(offsets)
         return offsets, out_data
 
-    @staticmethod
-    def process_data_change_annotation(data: Dict[str, pd.DataFrame], window_len, offset: int = 1, predictive: bool = True) -> Tuple[np.ndarray, List[torch.Tensor]]:
+    def process_data_change_annotation(self, data: Dict[str, pd.DataFrame], window_len, offset: int = 1,
+                                       predictive: bool = True, group_size: int = 1) -> Tuple[np.ndarray, List[torch.Tensor]]:
         """
         Process the data into the format we want and generate the index
         :param data: The raw data to process
         :param window_len: The length of the window
+        :param predictive: If True, the task is to predict the future
+        :param group_size: The number of point that are grouped together to make a single new point. (Used for downsampling)
         :return: The index, the processed data
         """
         if not predictive:
             print("PERFORMING AUXILIARY TASK: Not predictive")
         offsets = [-1]
         out_data = []
+        effective_window_len = window_len // group_size
         for name, chart in tqdm(data.items()):
+            chart = chart[["Open", "High", "Low", "Close", "Volume"]]
             if len(chart) > window_len + offset + 1:
-                offsets.append(len(chart) - window_len - offset + 1)
-                out_data.append((torch.from_numpy(chart.values[:-offset]),
-                                 annotate_chart_change(chart.values, offset, predictive=predictive)[:-offset]))
+                chart = chart.values
+                if group_size > 1:
+                    exploitable_len = (len(chart) // group_size) * group_size
+                    chart = self.group(chart[-exploitable_len:], group_size)
+                offsets.append(len(chart) - effective_window_len - offset + 1)
+                out_data.append((torch.from_numpy(chart[:-offset]),
+                                 annotate_chart_change(chart, offset, predictive=predictive)[:-offset]))
         offsets.append(offsets[-1] + 1)
         offsets = np.cumsum(offsets)
         return offsets, out_data
@@ -446,7 +484,8 @@ def make_dataloader(config, pipe: DataPipe, start: datetime, train_end: datetime
                             offset=config["data"]["offset"],
                             plt_fig=config["data"]["plt_fig"],
                             name="train",
-                            task=task
+                            task=task,
+                            group_size=config["data"]["group_size"]
                             )
     val_ds = ImageDataset(val_data, mode=config["data"]["mode"], p_quant=config["data"]["p_quant"],
                           window_len=config["data"]["window_len"], tickers=tickers,
@@ -458,7 +497,8 @@ def make_dataloader(config, pipe: DataPipe, start: datetime, train_end: datetime
                             offset=config["data"]["offset"],
                             plt_fig=config["data"]["plt_fig"],
                             name="val",
-                            task=task
+                            task=task,
+                            group_size=config["data"]["group_size"]
                           )
     test_ds = ImageDataset(test_data, mode=config["data"]["mode"], p_quant=config["data"]["p_quant"],
                            window_len=config["data"]["window_len"], tickers=tickers,
@@ -470,7 +510,8 @@ def make_dataloader(config, pipe: DataPipe, start: datetime, train_end: datetime
                             offset=config["data"]["offset"],
                             plt_fig=config["data"]["plt_fig"],
                             name="test",
-                            task=task
+                            task=task,
+                            group_size=config["data"]["group_size"]
                            )
 
     # Step 4: Initialize the dataloaders

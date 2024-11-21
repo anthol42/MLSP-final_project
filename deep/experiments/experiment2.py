@@ -92,6 +92,12 @@ def experiment2(args, kwargs):
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer,
                                                            T_max=config["training"]["num_epochs"],
                                                            eta_min=config["training"]["min_lr"])
+    # Prepare the path of input sampling if flag is set
+    if args.sample_inputs:
+        sample_inputs = f"{config['model']['model_dir']}/inputs.pth"
+    else:
+        sample_inputs = None
+
     # Training
     print("Begining training...")
     try:
@@ -106,10 +112,11 @@ def experiment2(args, kwargs):
             scheduler=scheduler,
             config=config,
             metrics=metrics,
-            watch=args.watch
+            watch=args.watch,
+            sample_inputs=sample_inputs
         )
     except KeyboardInterrupt:
-        print("\nInterrupt detected. Ending training...\n")
+        print("\nKeyboard Interrupt detected. Ending training...\n")
 
     # Load best model
     print("Loading best model")

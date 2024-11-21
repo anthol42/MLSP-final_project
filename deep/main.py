@@ -22,6 +22,7 @@ parser.add_argument("--debug", action='store_true', default=False)
 parser.add_argument("--dataset", required=False, type=str, default="huge")
 parser.add_argument("--comment", required=False, type=str, default=None)
 parser.add_argument("--cpu", action="store_true", default=False)
+parser.add_argument("--sample_inputs", action="store_true", default=False)
 parser.add_argument("--noscaler", action="store_true", default=False)
 parser.add_argument("--fract", required=False, type=float, default=1.) # Fraction of dataset
 parser.add_argument("--watch", required=False, type=str, default="precision")

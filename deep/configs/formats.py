@@ -11,7 +11,8 @@ config_format = {
         "enlarge_factor": int,
         "interpolation_factor": int,
         "offset": int,
-        "plt_fig": bool
+        "plt_fig": bool,
+        "group_size": int,
     },
     "training":{
         "num_epochs": int,

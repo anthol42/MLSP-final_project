@@ -2,15 +2,19 @@ import torch
 import utils
 from utils import State, Color, DynamicMetric
 import torchvision
+from typing import  *
 
 def train_one_epoch(dataloader, model, optimizer, criterion, epoch, device, feedback, scheduler=None, scaler=None,
-                    metrics: dict = None):
+                    metrics: dict = None, sample_inputs: Optional[str] = None):
     if metrics is None:
         metrics = {}
     model.train()
     lossCounter = DynamicMetric(name="loss")
     metrics_counter = {k: DynamicMetric(name=k) for k in metrics.keys()}
-    for X, y in dataloader:
+    for i, (X, y) in enumerate(dataloader):
+        if epoch == 0 and i == 0 and sample_inputs is not None:
+            print(f"Saving sample inputs at {sample_inputs}")
+            torch.save((X, y), sample_inputs)
         # Setup - Copying to gpu if available
         X, y = X.to(device), y.to(device)
         # for i in range(10_000):
@@ -115,7 +119,7 @@ def validation_step(model, dataloader, criterion, epoch, device, feedback, metri
     State.last_valid = last_valid
 
 def train(model, optimizer, train_loader, val_loader, criterion, num_epochs, device, config, scheduler=None,
-          metrics: dict = None, noscaler: bool = False, watch: str = "precision"):
+          metrics: dict = None, noscaler: bool = False, watch: str = "precision", sample_inputs: Optional[str] = None):
     State.global_step = 0
     # Checkpoints
     m, b = ("MIN", float("inf")) if watch == "loss" else ("MAX", float('-inf'))
@@ -138,7 +142,7 @@ def train(model, optimizer, train_loader, val_loader, criterion, num_epochs, dev
 
         # Train the epoch and validate
         train_one_epoch(
-            train_loader, model, optimizer, criterion, epoch, device, feedback, scheduler, scaler, metrics
+            train_loader, model, optimizer, criterion, epoch, device, feedback, scheduler, scaler, metrics, sample_inputs=sample_inputs
         )
         validation_step(
             model, val_loader, criterion, epoch, device, feedback, metrics

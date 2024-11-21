@@ -13,6 +13,7 @@ data:
   interpolation_factor: 1
   offset: 1
   plt_fig: False
+  group_size: 1
 training:
   num_epochs: 100
   lr: 0.0005
