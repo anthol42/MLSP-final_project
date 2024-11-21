@@ -54,8 +54,11 @@ most human would get really good results at this task too.
 | 13    |```python main.py --experiment=experiment2 --config=configs/paper_2.yml --dataset="small" --task="ud"``` | Test the up/down task with the paper model on the taiwan dataset                                                  |
 | 15    |```python main.py --experiment=experiment2 --config=configs/paper_2.yml --dataset="small" --task="count"```| Test the count task with the paper model on the taiwan dataset                                                    |
 | 16    |```python main.py --experiment=experiment2 --config=configs/paper_2.yml --dataset="smallUS" --config.training.lr=0.0001 --watch=accuracy``` | Test the paper model on the 50 most valuable US compagnies. (Analog to #11, but with us stocks instead of taiwan) |
-| 17    |```python main.py --experiment=experiment2 --config=configs/E_s2.yml --dataset="smallUS" --config.training.lr=0.0001 --watch=accuracy``` | Test the EfficientNetV2 small model on the 50 most valuable US compagnies (Analog to #16) |
-| 18    | ```python main.py --experiment=experiment2 --config=configs/E_s2.yml --dataset="small" --config.training.lr=0.0001 --watch=accuracy``` | Test the EfficientNetV2 small model on TW50 stocks. (Analog to #11, but with EfficientNet)
+| 17    |```python main.py --experiment=experiment2 --config=configs/E_s2.yml --dataset="smallUS" --config.training.lr=0.0001 --watch=accuracy``` | Test the EfficientNetV2 small model on the 50 most valuable US compagnies (Analog to #16)                         |
+| 18    | ```python main.py --experiment=experiment2 --config=configs/E_s2.yml --dataset="small" --config.training.lr=0.0001 --watch=accuracy``` | Test the EfficientNetV2 small model on TW50 stocks. (Analog to #11, but with EfficientNet)                        |
+| 20    | ```python main.py --experiment=experiment2 --config=configs/E_s2.yml --config.training.lr=0.0001 --watch=accuracy --fract=0.1``` | Test the EfficientNetV2 model on 10% of US stock market to see if scaling the dataset size improves performances  |
+| 21    | ```python main.py --experiment=experiment2 --config=configs/paper_2.yml --config.training.lr=0.0001 --watch=accuracy --fract=0.1```| Test the paper model on 10% of US stock market to see if scaling the dataset size improves performances |
+
 
 
 ## Results
