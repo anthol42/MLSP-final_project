@@ -316,6 +316,7 @@ class ImageDataset(Dataset):
         offsets = [-1]
         out_data = []
         for name, chart in tqdm(data.items()):
+            chart = chart[["Open", "High", "Low", "Close", "Volume"]]
             if len(chart) > window_len + 4 * WINDOW_SIZE + 1:
                 offsets.append(len(chart) - window_len - 4 * WINDOW_SIZE + 1)
                 out_data.append((torch.from_numpy(chart.values[2 * WINDOW_SIZE:-2 * WINDOW_SIZE]),
