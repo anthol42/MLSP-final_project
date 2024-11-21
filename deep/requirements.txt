@@ -34,3 +34,4 @@ tensorboard
 tqdm
 backtest-pro
 opencv-python
+jupyter

@@ -62,7 +62,7 @@ most human would get really good results at this task too.
 
 
 ## Results
-Checkout the jupyter notebook for the results visualization
+Checkout the jupyter notebook for the results visualization [here](../notebooks/ablation.ipynb)
 
 ## Short discussion
 
