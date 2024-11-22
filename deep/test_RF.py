@@ -1,4 +1,5 @@
 from sklearn.ensemble import RandomForestClassifier
+from sklearn.model_selection import RandomizedSearchCV
 from sklearn.metrics import accuracy_score
 from datetime import datetime
 from backtest.data import FetchCharts, Cache
@@ -65,12 +66,44 @@ print('Data preparation complete')
 
 
 # # Initiating - Training - Testing
-rf = RandomForestClassifier(n_estimators=100, verbose=1, random_state=42)
+rf = RandomForestClassifier(random_state=42)
 print('Setting done')
-rf.fit(X_train, Y_train)
+
+param_dist = {
+    'n_estimators': [100, 200, 300, 400, 500],
+    'max_depth': [None, 10, 20, 30, 40, 50],
+    'min_samples_split': [2, 5, 10],
+    'min_samples_leaf': [1, 2, 4],
+    'max_features': ['sqrt', 'log2', None]
+}
+
+randomized_search = RandomizedSearchCV(
+    estimator=rf,
+    param_distributions=param_dist,
+    n_iter=50,  # Number of parameter settings sampled
+    scoring='accuracy',
+    cv=3,  # 3-fold cross-validation
+    verbose=2,
+    random_state=42,
+    n_jobs=-1  # Use all available cores
+)
+
+print("Starting hyperparameter optimization...")
+randomized_search.fit(X_train, Y_train)
+
+print("Best parameters found:")
+print(randomized_search.best_params_)
+
+# Train the final model with the best parameters
+best_rf = randomized_search.best_estimator_
+best_rf.fit(X_validate, Y_validate)
 print('Fitting done')
-pred = rf.predict(X_test)
+
+# Prediction
+pred = best_rf.predict(X_test)
 print('Prediction done')
 print(Y_test.values, pred)
+
 # Evaluating with custom metrics
-print(accuracy_score(y_true=Y_test.values, y_pred=pred))
+print("Accuracy on test data:",
+      accuracy_score(y_true=Y_test.values, y_pred=pred))
