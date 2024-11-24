@@ -76,9 +76,10 @@ class PaperModel1D(nn.Module):
         return self.projector(x)
 
 class ResLSTM(nn.Module):
-    def __init__(self, dropout: float = 0.25):
+    def __init__(self, dropout: float = 0.25, res: bool = True):
         super().__init__()
         hidden_size = 64
+        self.res = res
         self.l1 = nn.LSTM(5, hidden_size, batch_first=True)
         self.l2 = nn.LSTM(hidden_size, hidden_size, batch_first=True)
         self.l3 = nn.LSTM(hidden_size, hidden_size, batch_first=True)
@@ -91,7 +92,8 @@ class ResLSTM(nn.Module):
             nn.Dropout(p=dropout),
             nn.Linear(128, 2),
         )
-    def forward(self, x):
+
+    def res_forward(self, x):
         z, _ = self.l1(x)
         z2, _ = self.l2(z)
         z = z + self.d(z2)
@@ -100,6 +102,20 @@ class ResLSTM(nn.Module):
         z = self.p(z)
         z = z.mean(dim=[1])
         return self.projector(z)
+
+    def lstm_forward(self, x):
+        z, _ = self.l1(x)
+        z, _ = self.l2(self.d(z))
+        z, _ = self.l3(self.d(z))
+        z = self.p(self.d(z))
+        z = z.mean(dim=[1])
+        return self.projector(z)
+
+    def forward(self, x):
+        if self.res:
+            return self.res_forward(x)
+        else:
+            return self.lstm_forward(x)
 
 def freeze_weights(model: torchvision.models.VisionTransformer):
     for p in model.parameters():
@@ -128,6 +144,8 @@ def from_name(config, annotation_type: str = "default"):
         model = PaperModel1D(dropout=config["model"]["dropout"])
     elif name == "ResLSTM":
         model = ResLSTM(dropout=config["model"]["dropout"])
+    elif name == "LSTM":
+        model = ResLSTM(dropout=config["model"]["dropout"], res=False)
     elif name == "VIT_b_16":
         model: torchvision.models.VisionTransformer = torchvision.models.vit_b_16(weights=torchvision.models.ViT_B_16_Weights.IMAGENET1K_V1)
         freeze_weights(model)
