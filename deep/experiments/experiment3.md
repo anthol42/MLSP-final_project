@@ -22,7 +22,9 @@ to have relative time series.
 ## Runs
 | RunID | Command | Objective                                                                                                         |
 |-------|---------|-------------------------------------------------------------------------------------------------------------------|
-| 28    |         |  
+| 28    | ```python main.py --experiment=experiment3 --config=configs/paper1D_2.yml --watch=accuracy --dataset="small"``` | Train the paper1D model on the TW50 dataset |
+| 29    | ```python main.py --experiment=experiment3 --config=configs/paper1D_2.yml --watch=accuracy --dataset="huge" --fract=0.1``` | Train the paper1D model on 10% of US stocks |
+| 
 
 
 
