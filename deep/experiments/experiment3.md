@@ -20,11 +20,12 @@ to have relative time series.
    - LSTM: We implement a residual LSTM with a similar number of parameters
 
 ## Runs
-| RunID | Command | Objective                                                                                                         |
-|-------|---------|-------------------------------------------------------------------------------------------------------------------|
+| RunID | Command | Objective                                   |
+|-------|---------|---------------------------------------------|
 | 28    | ```python main.py --experiment=experiment3 --config=configs/paper1D_2.yml --watch=accuracy --dataset="small"``` | Train the paper1D model on the TW50 dataset |
 | 29    | ```python main.py --experiment=experiment3 --config=configs/paper1D_2.yml --watch=accuracy --dataset="huge" --fract=0.1``` | Train the paper1D model on 10% of US stocks |
-| 
+| 30    | ```python main.py --experiment=experiment3 --config=configs/resLSTM.yml --watch=accuracy --dataset="small"``` | Train the LSTM model on the TW50 dataset    |
+| 31    |```python main.py --experiment=experiment3 --config=configs/resLSTM.yml --watch=accuracy --dataset="huge" --fract=0.1``` | Train the LSTM model on 10% of US stocks    |
 
 
 

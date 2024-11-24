@@ -75,6 +75,35 @@ class PaperModel1D(nn.Module):
         x = x.mean(dim=[2])
         return self.projector(x)
 
+class ResLSTM(nn.Module):
+    def __init__(self, dropout: float = 0.25):
+        super().__init__()
+        hidden_size = 64
+        self.l1 = nn.LSTM(5, hidden_size, batch_first=True)
+        self.l2 = nn.LSTM(hidden_size, hidden_size, batch_first=True)
+        self.l3 = nn.LSTM(hidden_size, hidden_size, batch_first=True)
+        self.d = nn.Dropout(p=dropout)
+        self.p = nn.Linear(hidden_size, 256)
+        self.relu = nn.ReLU()
+        self.projector = nn.Sequential(
+            nn.Linear(256, 128),
+            nn.ReLU(),
+            nn.Dropout(p=dropout),
+            nn.Linear(128, 2),
+        )
+    def forward(self, x):
+        z, _ = self.l1(x)
+        z2, _ = self.l2(z)
+        z = z + self.d(z2)
+        z3, _ = self.l3(z)
+        z = self.d(z3) + z
+        z = self.p(z)
+        z = z.mean(dim=[1])
+        return self.projector(z)
+
+def freeze_weights(model: torchvision.models.VisionTransformer):
+    for p in model.parameters():
+        p.requires_grad = False
 
 def from_name(config, annotation_type: str = "default"):
     name = config["model"]["name"]
@@ -97,12 +126,18 @@ def from_name(config, annotation_type: str = "default"):
         model = PaperModel(dropout=config["model"]["dropout"])
     elif name == "paper1D":
         model = PaperModel1D(dropout=config["model"]["dropout"])
+    elif name == "ResLSTM":
+        model = ResLSTM(dropout=config["model"]["dropout"])
     elif name == "VIT_b_16":
         model: torchvision.models.VisionTransformer = torchvision.models.vit_b_16(weights=torchvision.models.ViT_B_16_Weights.IMAGENET1K_V1)
+        freeze_weights(model)
         model.heads[0] = nn.Linear(768, n_class)
+        print(model.heads[0].weight.requires_grad)
     elif name == "VIT_b_32":
         model: torchvision.models.VisionTransformer = torchvision.models.vit_b_32(weights=torchvision.models.ViT_B_32_Weights.IMAGENET1K_V1)
+        freeze_weights(model)
         model.heads[0] = nn.Linear(768, n_class)
+        print(model.heads[0].weight.requires_grad)
     elif name == "ConvNeXt_tiny":
         model: torchvision.models.ConvNeXt = torchvision.models.convnext_tiny(weights=torchvision.models.ConvNeXt_Tiny_Weights.IMAGENET1K_V1)
         lastconv_output_channels = model.classifier[-1].in_features
@@ -116,3 +151,9 @@ def from_name(config, annotation_type: str = "default"):
         raise ValueError(f"Invalid model name: {name}!")
 
     return model
+
+if __name__ == "__main__":
+    from torchinfo import summary
+    model = ResLSTM()
+
+    summary(model, input_size=(1024, 20, 5))
