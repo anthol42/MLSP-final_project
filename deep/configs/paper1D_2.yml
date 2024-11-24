@@ -1,0 +1,25 @@
+# For experiment 2, we aim to have an image of shape 50x50 with 20 days of historic data
+# With the current configuration, we should have images of shape 59x59 with 20 days of historic data
+data:
+  batch_size: 1024
+  shuffle: True
+  num_workers: 8
+  mode: "basic"
+  p_quant: 57
+  window_len: 20
+  random_seed: 42
+  space_between: 1
+  enlarge_factor: 2
+  interpolation_factor: 1
+  offset: 1
+  plt_fig: False
+  group_size: 1
+training:
+  num_epochs: 100
+  lr: 0.0005
+  min_lr: 0.0001
+  weight_decay:  0.00005
+model:
+  model_dir: "saved_models"
+  name: "paper1D"
+  dropout: 0.1

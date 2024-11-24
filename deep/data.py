@@ -235,7 +235,7 @@ class ImageDataset(Dataset):
     def __init__(self, data: Dict[str, pd.DataFrame], p_quant: int = 128, window_len: int = 256, mode: str = 'subtract', tickers: Optional[Set[str]] = None,
                  random_seed: Optional[int] = None, space_between: int = 0, enlarge_factor: int = 1,
                  interpolation_factor: int = 2, annotation_type: str = 'default', offset: int = 1, plt_fig: bool = False, name: str = "train",
-                 task: str = "predictive", group_size: int = 1):
+                 task: str = "predictive", group_size: int = 1, ts: bool = False):
         """
         :param data: The data fetched from the data pipeline
         :param p_quant: The precision of the quantification (Number of bins or height of the image)
@@ -251,6 +251,7 @@ class ImageDataset(Dataset):
         :param plt_fig: If True, the image is generated using matplotlib renderer instead of the custom one
         :param task: The task that the model need to perform
         :param group_size: The number of point that are grouped together to make a single new point. (Used for downsampling)
+        :param ts: If true, the data won't be an image, but temporal data.
         """
         self.p_quant = p_quant
         self.window_len = window_len
@@ -261,6 +262,7 @@ class ImageDataset(Dataset):
         self.plt_fig = plt_fig
         self.task = task
         self.group_size = group_size
+        self.ts = ts
         if tickers is not None:
             data = self.sample_data(data, tickers)
 
@@ -390,7 +392,7 @@ class ImageDataset(Dataset):
         i = idx - self.offsets[chart_idx] - 1
         # Return the processed sample and the label
         chart, labels = self.data[chart_idx]
-        window = chart[i:i + self.window_len]
+        window = chart[i:i + self.window_len] # Shape(T, 5)
         label = torch.tensor(labels[i + self.window_len - 1]).long()
         if self.task == "count":
             label = self.get_count_label(window)
@@ -398,9 +400,31 @@ class ImageDataset(Dataset):
             img = self.plt_cache[idx]
             img = torch.from_numpy(img).float() / 255
             return img, label
+        elif self.ts:
+            first_idx = self.first_non_null(window)
+            starts = window[first_idx, np.arange(5)]
+            starts[first_idx == -1] = 1.  # Features that are all zeros will be divided by 1 to avoid division by zeros
+            norm_window = window / starts[None, :]   # Shape(T, 5) / Shape(1, 5)
+            assert (norm_window >= 0).all(), f"Found negative values in the window at index {idx}"
+            # To reduce the effect of extremes values, we take to log10
+            processed = torch.log10(norm_window + 1e-4)
+            return processed.float(), label
         else:
             return (self.process(window, self.p_quant, self.mode, self.space_between, self.enlarge_factor, self.interpolation_factor),
                 label)
+
+    @staticmethod
+    def first_non_null(x):
+        """
+        Get the first index of x non-null along columns. If all the elements of a given columns are null, it returns -1.
+        :param x: Array of shape(T, F) where F correspond to the number of features and T, the number of timestamps
+        :return: Array of shape(F, )
+        """
+        first_idx = np.argmin((x == 0), axis=0)
+        n_features = x.shape[1]
+        first_idx[x[first_idx, np.arange(n_features)] == 0] = -1
+        return first_idx
+
 
     @staticmethod
     def get_count_label(chart):
@@ -459,7 +483,7 @@ def split_data(data: Dict[str, pd.DataFrame], start: datetime, end: datetime) ->
     return out
 
 def make_dataloader(config, pipe: DataPipe, start: datetime, train_end: datetime, val_end: datetime, test_end: datetime,
-                    fract: float = 1., annotation_type: str = "default", task: str = "predictive"):
+                    fract: float = 1., annotation_type: str = "default", task: str = "predictive", ts: bool = False):
     # Step 1: Fetch the data
     data = pipe.get(start, test_end)
 
@@ -485,7 +509,8 @@ def make_dataloader(config, pipe: DataPipe, start: datetime, train_end: datetime
                             plt_fig=config["data"]["plt_fig"],
                             name="train",
                             task=task,
-                            group_size=config["data"]["group_size"]
+                            group_size=config["data"]["group_size"],
+                            ts=ts
                             )
     val_ds = ImageDataset(val_data, mode=config["data"]["mode"], p_quant=config["data"]["p_quant"],
                           window_len=config["data"]["window_len"], tickers=tickers,
@@ -498,7 +523,8 @@ def make_dataloader(config, pipe: DataPipe, start: datetime, train_end: datetime
                             plt_fig=config["data"]["plt_fig"],
                             name="val",
                             task=task,
-                            group_size=config["data"]["group_size"]
+                            group_size=config["data"]["group_size"],
+                            ts=ts
                           )
     test_ds = ImageDataset(test_data, mode=config["data"]["mode"], p_quant=config["data"]["p_quant"],
                            window_len=config["data"]["window_len"], tickers=tickers,
@@ -511,7 +537,8 @@ def make_dataloader(config, pipe: DataPipe, start: datetime, train_end: datetime
                             plt_fig=config["data"]["plt_fig"],
                             name="test",
                             task=task,
-                            group_size=config["data"]["group_size"]
+                            group_size=config["data"]["group_size"],
+                            ts=ts
                            )
 
     # Step 4: Initialize the dataloaders
@@ -525,13 +552,16 @@ def make_dataloader(config, pipe: DataPipe, start: datetime, train_end: datetime
     return train_dataloader, val_dataloader, test_dataloader
 
 if __name__ == "__main__":
-    from backtest.data import FetchCharts, Cache
+    from backtest.data import JSONCache, FetchCharts, Cache, FilterNoneCharts, CausalImpute
+    from pipes import Finviz, RmTz, FromFile
     from datetime import datetime
-    TICKERS = ['AAPL', 'NVDA', 'META', "AMZN"]
-    pipe = FetchCharts(TICKERS) | Cache()
+
+    pipe = FromFile("tw50.json") | JSONCache() | \
+           FetchCharts(progress=True, throttle=1., auto_adjust=False) | \
+           Cache() | FilterNoneCharts() | RmTz() | CausalImpute()
+    pipe.set_id(10)
     data = pipe.get(datetime(2000, 1, 1), datetime(2020, 1, 1))
-    annot = annotate_tickers(data["AAPL"].values)
-    print(annot)
+    data = split_data(data, datetime(2000, 1, 1), datetime(2016, 12, 31))
     # plt.plot(data["AAPL"].index, data["AAPL"]["Close"])
     # labels_up = data["AAPL"]["Close"].values.copy()
     # labels_up[annot == 0] = np.nan
@@ -540,13 +570,12 @@ if __name__ == "__main__":
     # plt.scatter(data["AAPL"].index, labels_up, color='green')
     # plt.scatter(data["AAPL"].index, labels_down, color='red')
     # plt.show()
-    dataset = ImageDataset(data, mode='basic', p_quant=57, window_len=20, space_between=1, enlarge_factor=2, interpolation_factor=1, plt_fig=True)
-    print(len(data["AAPL"]), len(data["NVDA"]), len(data["META"]))
+    dataset = ImageDataset(data, mode='basic', p_quant=57, window_len=20, space_between=1, enlarge_factor=2, interpolation_factor=1, ts=True)
     # print(dataset[11214])
     print(len(dataset))
-    k = 0
-    for i, (image, label) in enumerate(tqdm(dataset)):
-        pass
+    print(dataset[122089])
+    # for i, (image, label) in enumerate(tqdm(dataset)):
+    #     pass
         # if i % 256 == 0:
         #     plt.imshow(image.permute(1, 2, 0), aspect=1)
         #     plt.tight_layout()

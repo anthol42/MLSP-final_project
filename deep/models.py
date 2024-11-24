@@ -38,6 +38,43 @@ class PaperModel(nn.Module):
         x = x.mean(dim=[2, 3])
         return self.projector(x)
 
+class PaperModel1D(nn.Module):
+    def __init__(self, dropout: float = 0.25):
+        super().__init__()
+        self.encoder = nn.Sequential(
+            nn.Conv1d(5, 32, kernel_size=3, padding=1),
+            nn.ReLU(),
+            nn.MaxPool1d(kernel_size=2),
+            nn.Conv1d(32, 48, kernel_size=3, padding=1),
+            nn.ReLU(),
+            nn.MaxPool1d(kernel_size=2),
+            nn.Dropout(p=dropout),
+            nn.Conv1d(48, 64, kernel_size=3, padding=1),
+            nn.ReLU(),
+            nn.MaxPool1d(kernel_size=2),
+            nn.Conv1d(64, 96, kernel_size=3, padding=1),
+            nn.ReLU(),
+            nn.MaxPool1d(kernel_size=2),
+            nn.Dropout(p=dropout),
+            nn.Conv1d(96, 256, kernel_size=3, padding=1),
+        )
+        self.projector = nn.Sequential(
+            nn.Linear(256, 128),
+            nn.ReLU(),
+            nn.Dropout(p=dropout),
+            nn.Linear(128, 2),
+        )
+
+    def forward(self, x):
+        """
+        :param x: Batch of TS (B, T, 5)
+        :return: The predicted logits
+        """
+        x = x.permute(0, 2, 1)
+        x = self.encoder(x)
+        x = x.mean(dim=[2])
+        return self.projector(x)
+
 
 def from_name(config, annotation_type: str = "default"):
     name = config["model"]["name"]
@@ -58,6 +95,8 @@ def from_name(config, annotation_type: str = "default"):
         )
     elif name == "paper":
         model = PaperModel(dropout=config["model"]["dropout"])
+    elif name == "paper1D":
+        model = PaperModel1D(dropout=config["model"]["dropout"])
     elif name == "VIT_b_16":
         model: torchvision.models.VisionTransformer = torchvision.models.vit_b_16(weights=torchvision.models.ViT_B_16_Weights.IMAGENET1K_V1)
         model.heads[0] = nn.Linear(768, n_class)
