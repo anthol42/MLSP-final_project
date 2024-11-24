@@ -21,6 +21,8 @@ stock market is more liquid, which could make prediction harder, but more profit
 5. Test on US50 and TW50 with another, bigger, model.
    - Note: It over fits shit ton
 6. Try on a bigger dataset (randomly sample 10% of US stocks that existed before 2017-01-01). To keep the task fair, we scaled the valid and test set accordingly
+7. Try by subsampling to see if it removes noise and improve performances
+8. Try with a pretrained vision transformer with fixed weights
 
 ### Task 1: Up or Down (*ud*)
 This first task aim to test if the model can understand basic patterns. The goal of this task is to accurately affirm 
