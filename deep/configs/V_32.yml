@@ -1,17 +1,23 @@
 data:
-  batch_size: 256
+  batch_size: 1024
   shuffle: True
-  num_workers: 2
-  mode: "subtract"
-  p_quant: 112
-  window_len: 112
+  num_workers: 8
+  mode: "basic"
+  p_quant: 57
+  window_len: 20
   random_seed: 42
+  space_between: 1
+  enlarge_factor: 2
+  interpolation_factor: 1
+  offset: 1
+  plt_fig: False
+  group_size: 1
 training:
   num_epochs: 20
-  lr: 0.001
-  min_lr: 0.0005
-  weight_decay:  0.00005
+  lr: 0.0001
+  min_lr: 0.00001
+  weight_decay:  0.0
 model:
   model_dir: "saved_models"
   name: "VIT_b_32"
-  dropout: 0.5
+  dropout: 0.1

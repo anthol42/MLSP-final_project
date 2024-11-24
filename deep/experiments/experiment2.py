@@ -71,7 +71,7 @@ def experiment2(args, kwargs):
     State.writer = Reporter(log_dir=f'runs/{run_id}', comment=comment)
 
     if "VIT" in config["model"]["name"]:
-        image_shape = (256, 256)
+        image_shape = (224, 224)
     else:
         image_shape = None
     # Loading the data
@@ -87,7 +87,8 @@ def experiment2(args, kwargs):
     # Loading the model
     model = models.from_name(config, annotation_type="change")
     model = model.to(device)
-    summary(model, input_size=(config["data"]["batch_size"], 3, 2 * config["data"]["p_quant"], 2 * config["data"]["window_len"]), device=device)
+    image_shape = image_shape if image_shape is not None else (2 * config["data"]["p_quant"], 2 * config["data"]["window_len"])
+    summary(model, input_size=(config["data"]["batch_size"], 3, *image_shape), device=device)
     print("Model loaded successfully!")
 
     # Loading optimizer, loss and scheduler

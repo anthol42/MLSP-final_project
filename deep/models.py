@@ -132,12 +132,10 @@ def from_name(config, annotation_type: str = "default"):
         model: torchvision.models.VisionTransformer = torchvision.models.vit_b_16(weights=torchvision.models.ViT_B_16_Weights.IMAGENET1K_V1)
         freeze_weights(model)
         model.heads[0] = nn.Linear(768, n_class)
-        print(model.heads[0].weight.requires_grad)
     elif name == "VIT_b_32":
         model: torchvision.models.VisionTransformer = torchvision.models.vit_b_32(weights=torchvision.models.ViT_B_32_Weights.IMAGENET1K_V1)
         freeze_weights(model)
         model.heads[0] = nn.Linear(768, n_class)
-        print(model.heads[0].weight.requires_grad)
     elif name == "ConvNeXt_tiny":
         model: torchvision.models.ConvNeXt = torchvision.models.convnext_tiny(weights=torchvision.models.ConvNeXt_Tiny_Weights.IMAGENET1K_V1)
         lastconv_output_channels = model.classifier[-1].in_features
