@@ -501,14 +501,15 @@ def make_dataloader(config, pipe: DataPipe, start: datetime, train_end: datetime
             test_data = {ticker: test_data[ticker] for ticker in tickers}
 
     elif split_method == "stocks":
+        print("Splitting along stocks")
         if fract < 1.0:
             tickers = sample_tickers(data, fract, seed=config["data"]["random_seed"])
             data = {ticker: data[ticker] for ticker in tickers}
         tickers = list(data.keys())
         random.seed(config["data"]["random_seed"]) if config["data"]["random_seed"] is not None else None
         random.shuffle(tickers)
-        train_tickers = tickers[:int(0.7 * len(tickers))]
-        val_tickers = tickers[int(0.7 * len(tickers)):int(0.8 * len(tickers))]
+        train_tickers = tickers[:int(0.8 * len(tickers))]
+        val_tickers = tickers[int(0.8 * len(tickers)):]
         test_tickers = tickers[int(0.8 * len(tickers)):]
         train_data = {ticker: data[ticker].copy() for ticker in train_tickers}
         val_data = {ticker: data[ticker].copy() for ticker in val_tickers}

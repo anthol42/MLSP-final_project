@@ -22,7 +22,8 @@ stock market is more liquid, which could make prediction harder, but more profit
    - Note: It over fits shit ton
 6. Try on a bigger dataset (randomly sample 10% of US stocks that existed before 2017-01-01). To keep the task fair, we scaled the valid and test set accordingly
 7. Try by subsampling to see if it removes noise and improve performances
-8. Try with a pretrained vision transformer with fixed weights
+8. Test with split across stocks to see if it is how they achieved great results
+9. Try with a pretrained vision transformer with fixed weights
 
 ### Task 1: Up or Down (*ud*)
 This first task aim to test if the model can understand basic patterns. The goal of this task is to accurately affirm 
@@ -65,9 +66,8 @@ most human would get really good results at this task too.
 | 24   | ```python main.py --experiment=experiment2 --config=configs/paper_2.yml --watch=accuracy --sample_inputs --config.data.group_size=10 --config.data.window_len=200 --fract=0.1``` | We group in groups of 10 days                                                                                     |
 | 25   | ```python main.py --experiment=experiment2 --config=configs/paper_2.yml --watch=accuracy --sample_inputs --config.data.group_size=2 --config.data.window_len=40 --fract=0.2``` | We group in groups of 2 days, and scale the dataset accordingly                                                   |
 | 26   | ```python main.py --experiment=experiment2 --config=configs/paper_2.yml --watch=accuracy --sample_inputs --config.data.group_size=5 --config.data.window_len=100 --fract=0.5``` | We group in groups of 5 days, and scale the dataset accordingly                                                   |
-| 27   | ```python main.py --experiment=experiment2 --config=configs/paper_2.yml --watch=accuracy --sample_inputs --config.data.group_size=10 --config.data.window_len=200``` | We group in groups of 10 days, and scale the dataset accordingly |
-
-
+| 27   | ```python main.py --experiment=experiment2 --config=configs/paper_2.yml --watch=accuracy --sample_inputs --config.data.group_size=10 --config.data.window_len=200``` | We group in groups of 10 days, and scale the dataset accordingly                                                  |
+| 33   | ```python main.py --experiment=experiment2 --config=configs/paper_2.yml --dataset=small --config.training.lr=0.0001 --watch=accuracy --split="stocks"``` | Test paper model on TW50 dataset to see if it was how they did their split: a dataleaking strategy                |
 
 ## Results
 Checkout the jupyter notebook for the results visualization [here](../notebooks/ablation.ipynb)
