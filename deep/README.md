@@ -6,6 +6,11 @@
 - [ ] Missing neutral class
 - [ ] Set grid parameters to test
 - [ ] Train on valeria
+- Try 1D CNN
+- Try Finetuning head of transformer
+- Try with promptable LLM (Fine tune LLAMA, zero shot prompting)
+	- With Images
+	- With numbers
 
 ## Description
 It is in this folder that we will implement the training loop and make the deep learning experiments
