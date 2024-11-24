@@ -1,3 +1,5 @@
+# For experiment 2, we aim to have an image of shape 50x50 with 20 days of historic data
+# With the current configuration, we should have images of shape 59x59 with 20 days of historic data
 data:
   batch_size: 1024
   shuffle: True
@@ -13,11 +15,11 @@ data:
   plt_fig: False
   group_size: 1
 training:
-  num_epochs: 20
-  lr: 0.0001
-  min_lr: 0.00001
-  weight_decay:  0.0
+  num_epochs: 250
+  lr: 0.001
+  min_lr: 0.0001
+  weight_decay:  0.00005
 model:
   model_dir: "saved_models"
-  name: "VIT_b_32"
+  name: "LSTM"
   dropout: 0.1

@@ -23,7 +23,7 @@ metrics = {
     "precision": precision_2d
 }
 
-def experiment2(args, kwargs):
+def experiment3(args, kwargs):
     if args.dataset == "huge":
         pipe = Finviz("https://finviz.com/screener.ashx?v=111&f=ipodate_more10",True) | JSONCache() | \
                FetchCharts(progress=True, throttle=1., auto_adjust=False) | \
@@ -70,25 +70,19 @@ def experiment2(args, kwargs):
         shutil.rmtree(f'runs/{run_id}')
     State.writer = Reporter(log_dir=f'runs/{run_id}', comment=comment)
 
-    if "VIT" in config["model"]["name"]:
-        image_shape = (224, 224)
-    else:
-        image_shape = None
     # Loading the data
     train_loader, val_loader, test_loader = make_dataloader(config=config, pipe=pipe,
                                                             start=datetime(2000, 1, 1),
                                                             train_end=datetime(2016, 12, 31),
                                                             val_end=datetime(2018, 6, 13),
                                                             test_end=datetime(2020, 1, 1),
-                                                            fract=args.fract, annotation_type="change", task=args.task,
-                                                            image_shape=image_shape, split_method=args.split)
+                                                            fract=args.fract, annotation_type="change", task=args.task, ts=True)
     print("Data loaded successfully!")
 
     # Loading the model
     model = models.from_name(config, annotation_type="change")
     model = model.to(device)
-    image_shape = image_shape if image_shape is not None else (2 * config["data"]["p_quant"], 2 * config["data"]["window_len"])
-    summary(model, input_size=(config["data"]["batch_size"], 3, *image_shape), device=device)
+    summary(model, input_size=(config["data"]["batch_size"], config["data"]["window_len"], 5), device=device)
     print("Model loaded successfully!")
 
     # Loading optimizer, loss and scheduler

@@ -11,7 +11,7 @@ parser = argparse.ArgumentParser()
 # ######################################################################################################################
 from experiments.experiment1 import experiment1
 from experiments.experiment2 import experiment2
-
+from experiments.experiment3 import experiment3
 
 # ######################################################################################################################
 # --------------------------------- Add here your arguments to pass to the experiment -------------------------------- #
@@ -26,8 +26,8 @@ parser.add_argument("--sample_inputs", action="store_true", default=False)
 parser.add_argument("--noscaler", action="store_true", default=False)
 parser.add_argument("--fract", required=False, type=float, default=1.) # Fraction of dataset
 parser.add_argument("--watch", required=False, type=str, default="precision")
-parser.add_argument("--task", required=False, type=str, default="predictive") # Predictive, ud or count
-
+parser.add_argument("--task", required=False, type=str, default="predictive")  # Predictive, ud or count
+parser.add_argument("--split", required=False, type=str, default="time")    # Split method: time or stocks
 
 # ######################################################################################################################
 # ------------------------------------------ Register you experiments here ------------------------------------------- #
@@ -35,6 +35,7 @@ parser.add_argument("--task", required=False, type=str, default="predictive") # 
 experiments = {
     "experiment1":experiment1,
     "experiment2":experiment2,
+    "experiment3":experiment3
 }
 
 
