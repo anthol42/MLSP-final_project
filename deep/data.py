@@ -232,8 +232,8 @@ def sample_tickers(data: Dict[str, pd.DataFrame], fract: float, seed: Optional[i
     return {ticker for ticker in keys[:threshold]}
 class ImageDataset(Dataset):
     LABELS = ["DOWN", "UP", "NEUTRAL"]
-    def __init__(self, data: Dict[str, pd.DataFrame], p_quant: int = 128, window_len: int = 256, mode: str = 'subtract', tickers: Optional[Set[str]] = None,
-                 random_seed: Optional[int] = None, space_between: int = 0, enlarge_factor: int = 1,
+    def __init__(self, data: Dict[str, pd.DataFrame], p_quant: int = 128, window_len: int = 256, mode: str = 'subtract',
+                 space_between: int = 0, enlarge_factor: int = 1,
                  interpolation_factor: int = 2, annotation_type: str = 'default', offset: int = 1, plt_fig: bool = False, name: str = "train",
                  task: str = "predictive", group_size: int = 1, ts: bool = False, image_shape: Optional[Tuple[int, int]] = None):
         """
@@ -241,8 +241,6 @@ class ImageDataset(Dataset):
         :param p_quant: The precision of the quantification (Number of bins or height of the image)
         :param window_len: The length of the window that the image will represent (Width of the image)
         :param mode: The mode: add or subtract
-        :param tickers: The tickers to sample. If none, all the data is used
-        :param random_seed: The random seed to use in the dataset. NOTE: It will set the random seed globally in python's random module
         :param space_between: The number of pixel between each candle
         :param enlarge_factor: Width in pixels of the candles
         :param interpolation_factor: The factor to interpolate the image. If 1, no interpolation is done
@@ -265,8 +263,6 @@ class ImageDataset(Dataset):
         self.group_size = group_size
         self.ts = ts
         self.out_shape = image_shape
-        if tickers is not None:
-            data = self.sample_data(data, tickers)
 
         if annotation_type == 'default':
             self.offsets, self.data = self.process_data(data, window_len, self.group_size)
@@ -488,24 +484,42 @@ def split_data(data: Dict[str, pd.DataFrame], start: datetime, end: datetime) ->
 
 def make_dataloader(config, pipe: DataPipe, start: datetime, train_end: datetime, val_end: datetime, test_end: datetime,
                     fract: float = 1., annotation_type: str = "default", task: str = "predictive", ts: bool = False,
-                    image_shape: Optional[Tuple[int, int]] = None):
+                    image_shape: Optional[Tuple[int, int]] = None, split_method: str = "time"):
     # Step 1: Fetch the data
-    data = pipe.get(start, test_end)
+    data: Dict[str, pd.DataFrame] = pipe.get(start, test_end)
 
     # Step 2: Split the data
-    train_data = split_data(data, start, train_end)
-    val_data = split_data(data, train_end + timedelta(days=1), val_end)
-    test_data = split_data(data, val_end + timedelta(days=1), test_end)
+    if split_method == "time":
+        train_data = split_data(data, start, train_end)
+        val_data = split_data(data, train_end + timedelta(days=1), val_end)
+        test_data = split_data(data, val_end + timedelta(days=1), test_end)
 
-    if fract < 1.:
-        tickers = sample_tickers(train_data, fract, seed=config["data"]["random_seed"])
+        if fract < 1.:
+            tickers = sample_tickers(train_data, fract, seed=config["data"]["random_seed"])
+            train_data = {ticker: train_data[ticker] for ticker in tickers}
+            val_data = {ticker: val_data[ticker] for ticker in tickers}
+            test_data = {ticker: test_data[ticker] for ticker in tickers}
+
+    elif split_method == "stocks":
+        if fract < 1.0:
+            tickers = sample_tickers(data, fract, seed=config["data"]["random_seed"])
+            data = {ticker: data[ticker] for ticker in tickers}
+        tickers = list(data.keys())
+        random.seed(config["data"]["random_seed"]) if config["data"]["random_seed"] is not None else None
+        random.shuffle(tickers)
+        train_tickers = tickers[:int(0.7 * len(tickers))]
+        val_tickers = tickers[int(0.7 * len(tickers)):int(0.8 * len(tickers))]
+        test_tickers = tickers[int(0.8 * len(tickers)):]
+        train_data = {ticker: data[ticker].copy() for ticker in train_tickers}
+        val_data = {ticker: data[ticker].copy() for ticker in val_tickers}
+        test_data = {ticker: data[ticker].copy() for ticker in test_tickers}
     else:
-        tickers = None
+        raise ValueError(f"Invalid split method: {split_method}")
+
 
     # Step 3: Make the datasets
     train_ds = ImageDataset(train_data, mode=config["data"]["mode"], p_quant=config["data"]["p_quant"],
-                            window_len=config["data"]["window_len"], tickers=tickers,
-                            random_seed=config["data"]["random_seed"],
+                            window_len=config["data"]["window_len"],
                             space_between=config["data"]["space_between"],
                             enlarge_factor=config["data"]["enlarge_factor"],
                             interpolation_factor=config["data"]["interpolation_factor"],
@@ -519,8 +533,7 @@ def make_dataloader(config, pipe: DataPipe, start: datetime, train_end: datetime
                             image_shape=image_shape
                             )
     val_ds = ImageDataset(val_data, mode=config["data"]["mode"], p_quant=config["data"]["p_quant"],
-                          window_len=config["data"]["window_len"], tickers=tickers,
-                            random_seed=config["data"]["random_seed"],
+                          window_len=config["data"]["window_len"],
                             space_between=config["data"]["space_between"],
                             enlarge_factor=config["data"]["enlarge_factor"],
                             interpolation_factor=config["data"]["interpolation_factor"],
@@ -534,8 +547,7 @@ def make_dataloader(config, pipe: DataPipe, start: datetime, train_end: datetime
                             image_shape=image_shape
                           )
     test_ds = ImageDataset(test_data, mode=config["data"]["mode"], p_quant=config["data"]["p_quant"],
-                           window_len=config["data"]["window_len"], tickers=tickers,
-                            random_seed=config["data"]["random_seed"],
+                           window_len=config["data"]["window_len"],
                             space_between=config["data"]["space_between"],
                             enlarge_factor=config["data"]["enlarge_factor"],
                             interpolation_factor=config["data"]["interpolation_factor"],

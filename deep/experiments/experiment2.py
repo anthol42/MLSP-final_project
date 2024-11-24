@@ -81,7 +81,7 @@ def experiment2(args, kwargs):
                                                             val_end=datetime(2018, 6, 13),
                                                             test_end=datetime(2020, 1, 1),
                                                             fract=args.fract, annotation_type="change", task=args.task,
-                                                            image_shape=image_shape)
+                                                            image_shape=image_shape, split_method=args.split)
     print("Data loaded successfully!")
 
     # Loading the model
