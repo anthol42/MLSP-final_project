@@ -235,7 +235,7 @@ class ImageDataset(Dataset):
     def __init__(self, data: Dict[str, pd.DataFrame], p_quant: int = 128, window_len: int = 256, mode: str = 'subtract', tickers: Optional[Set[str]] = None,
                  random_seed: Optional[int] = None, space_between: int = 0, enlarge_factor: int = 1,
                  interpolation_factor: int = 2, annotation_type: str = 'default', offset: int = 1, plt_fig: bool = False, name: str = "train",
-                 task: str = "predictive", group_size: int = 1, ts: bool = False):
+                 task: str = "predictive", group_size: int = 1, ts: bool = False, image_shape: Optional[Tuple[int, int]] = None):
         """
         :param data: The data fetched from the data pipeline
         :param p_quant: The precision of the quantification (Number of bins or height of the image)
@@ -252,6 +252,7 @@ class ImageDataset(Dataset):
         :param task: The task that the model need to perform
         :param group_size: The number of point that are grouped together to make a single new point. (Used for downsampling)
         :param ts: If true, the data won't be an image, but temporal data.
+        :param image_shape: If not None, the images will be resized to this shape before being fed to the model
         """
         self.p_quant = p_quant
         self.window_len = window_len
@@ -263,6 +264,7 @@ class ImageDataset(Dataset):
         self.task = task
         self.group_size = group_size
         self.ts = ts
+        self.out_shape = image_shape
         if tickers is not None:
             data = self.sample_data(data, tickers)
 
@@ -410,7 +412,7 @@ class ImageDataset(Dataset):
             processed = torch.log10(norm_window + 1e-4)
             return processed.float(), label
         else:
-            return (self.process(window, self.p_quant, self.mode, self.space_between, self.enlarge_factor, self.interpolation_factor),
+            return (self.process(window, self.p_quant, self.mode, self.space_between, self.enlarge_factor, self.interpolation_factor, out_shape=self.out_shape),
                 label)
 
     @staticmethod
@@ -439,7 +441,7 @@ class ImageDataset(Dataset):
         return (ratio > 0.5).long()
 
     @staticmethod
-    def process(window: torch.Tensor, p_quant: int, mode: str, space_between: int, enlarge_factor: int, interpolation_factor: int) -> torch.Tensor:
+    def process(window: torch.Tensor, p_quant: int, mode: str, space_between: int, enlarge_factor: int, interpolation_factor: int, out_shape: Optional[Tuple[int, int]] = None) -> torch.Tensor:
         """
         Process the window into an image and a label
         :param window: The window to process
@@ -452,6 +454,8 @@ class ImageDataset(Dataset):
         # Interpolate 2x
         if interpolation_factor > 1:
             image = F.interpolate(image.unsqueeze(0), scale_factor=interpolation_factor, mode='nearest').squeeze(0)
+        elif out_shape is not None:
+            image = F.interpolate(image.unsqueeze(0), size=out_shape, mode='nearest').squeeze(0)
         return image.float()
 
     @staticmethod
@@ -483,7 +487,8 @@ def split_data(data: Dict[str, pd.DataFrame], start: datetime, end: datetime) ->
     return out
 
 def make_dataloader(config, pipe: DataPipe, start: datetime, train_end: datetime, val_end: datetime, test_end: datetime,
-                    fract: float = 1., annotation_type: str = "default", task: str = "predictive", ts: bool = False):
+                    fract: float = 1., annotation_type: str = "default", task: str = "predictive", ts: bool = False,
+                    image_shape: Optional[Tuple[int, int]] = None):
     # Step 1: Fetch the data
     data = pipe.get(start, test_end)
 
@@ -510,7 +515,8 @@ def make_dataloader(config, pipe: DataPipe, start: datetime, train_end: datetime
                             name="train",
                             task=task,
                             group_size=config["data"]["group_size"],
-                            ts=ts
+                            ts=ts,
+                            image_shape=image_shape
                             )
     val_ds = ImageDataset(val_data, mode=config["data"]["mode"], p_quant=config["data"]["p_quant"],
                           window_len=config["data"]["window_len"], tickers=tickers,
@@ -524,7 +530,8 @@ def make_dataloader(config, pipe: DataPipe, start: datetime, train_end: datetime
                             name="val",
                             task=task,
                             group_size=config["data"]["group_size"],
-                            ts=ts
+                            ts=ts,
+                            image_shape=image_shape
                           )
     test_ds = ImageDataset(test_data, mode=config["data"]["mode"], p_quant=config["data"]["p_quant"],
                            window_len=config["data"]["window_len"], tickers=tickers,
@@ -538,7 +545,8 @@ def make_dataloader(config, pipe: DataPipe, start: datetime, train_end: datetime
                             name="test",
                             task=task,
                             group_size=config["data"]["group_size"],
-                            ts=ts
+                            ts=ts,
+                            image_shape=image_shape
                            )
 
     # Step 4: Initialize the dataloaders

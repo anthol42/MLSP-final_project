@@ -70,13 +70,18 @@ def experiment2(args, kwargs):
         shutil.rmtree(f'runs/{run_id}')
     State.writer = Reporter(log_dir=f'runs/{run_id}', comment=comment)
 
+    if "VIT" in config["model"]["name"]:
+        image_shape = (256, 256)
+    else:
+        image_shape = None
     # Loading the data
     train_loader, val_loader, test_loader = make_dataloader(config=config, pipe=pipe,
                                                             start=datetime(2000, 1, 1),
                                                             train_end=datetime(2016, 12, 31),
                                                             val_end=datetime(2018, 6, 13),
                                                             test_end=datetime(2020, 1, 1),
-                                                            fract=args.fract, annotation_type="change", task=args.task)
+                                                            fract=args.fract, annotation_type="change", task=args.task,
+                                                            image_shape=image_shape)
     print("Data loaded successfully!")
 
     # Loading the model
