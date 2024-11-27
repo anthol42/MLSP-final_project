@@ -12,6 +12,14 @@
 	- With Images
 	- With numbers
 
+## Feedback
+- [ ] Expliquer davantage ce qu’est un alpha
+- [ ] Work with synthetic data (generate time series 99 and 1 are targets) linear function with noise
+    - [ ] Plot accuracy in function of noise
+- [ ] Do grad Cam saliency maps
+- [ ] Inject vector representation to LSTM or Transformer + time series(or use attention)
+- [ ] Test for domain adaptation. Train on one market, then test on another market
+
 ## Description
 It is in this folder that we will implement the training loop and make the deep learning experiments
 
