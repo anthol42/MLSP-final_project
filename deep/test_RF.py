@@ -122,7 +122,19 @@ if '__main__' == __name__:
         best_rf = randomized_search.best_estimator_
     else:
         best_rf = RandomForestClassifier(random_state=42, max_depth=10, n_jobs=-1)
-    best_rf.fit(X_validate, Y_validate)
+
+    # Get label ditstibution
+    _, counts_train = np.unique(Y_train, return_counts=True)
+    _, counts_val = np.unique(Y_validate, return_counts=True)
+    _, counts_test = np.unique(Y_test, return_counts=True)
+    print(f"Train label distribution: 0: {counts_train[0]}, 1: {counts_train[1]}, total: {len(Y_train)}")
+    print(f"Validation label distribution: 0: {counts_val[0]}, 1: {counts_val[1]}, total: {len(Y_validate)}")
+    print(f"Test label distribution: 0: {counts_test[0]}, 1: {counts_test[1]}, total: {len(Y_test)}")
+    print("-----------------------------------------------------------------------------------------------")
+    print(f"Train label positive ratio: {counts_train[1] / len(Y_train)}")
+    print(f"Validation label positive ratio: {counts_val[1] / len(Y_validate)}")
+    print(f"Test label positive ratio: {counts_test[1] / len(Y_test)}")
+    best_rf.fit(X_train, Y_train)
     print('Fitting done')
 
     # Prediction
