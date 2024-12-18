@@ -2,7 +2,7 @@ import os.path
 import torch
 import torchvision.models
 from torch import nn
-from data import make_dataloader
+from data import make_dataloader, make_plt_dataloader
 from train import train, evaluate
 import sys
 import shutil
@@ -75,13 +75,20 @@ def experiment2(args, kwargs):
     else:
         image_shape = None
     # Loading the data
-    train_loader, val_loader, test_loader = make_dataloader(config=config, pipe=pipe,
-                                                            start=datetime(2000, 1, 1),
-                                                            train_end=datetime(2016, 12, 31),
-                                                            val_end=datetime(2018, 6, 13),
-                                                            test_end=datetime(2020, 1, 1),
-                                                            fract=args.fract, annotation_type="change", task=args.task,
-                                                            image_shape=image_shape, split_method=args.split)
+    if args.split == "random":
+        print("Making random dataset")
+        train_loader, val_loader, test_loader = make_plt_dataloader(config=config, pipe=pipe,
+                                                                start=datetime(2000, 1, 1),
+                                                                    end=datetime(2020, 1, 1),
+                                                                    fract=args.fract)
+    else:
+        train_loader, val_loader, test_loader = make_dataloader(config=config, pipe=pipe,
+                                                                start=datetime(2000, 1, 1),
+                                                                train_end=datetime(2016, 12, 31),
+                                                                val_end=datetime(2018, 6, 13),
+                                                                test_end=datetime(2020, 1, 1),
+                                                                fract=args.fract, annotation_type="change", task=args.task,
+                                                                image_shape=image_shape, split_method=args.split)
     print("Data loaded successfully!")
 
     # Loading the model
@@ -129,7 +136,7 @@ def experiment2(args, kwargs):
     weights = torch.load(f'{config["model"]["model_dir"]}/{config["model"]["name"]}.pth', weights_only=False)["model_state_dict"]
     model.load_state_dict(weights)
     # Test
-    results = evaluate(model, test_loader, loss, device, metrics=metrics)
+    results = evaluate(model, val_loader, loss, device, metrics=metrics)
     print("Training done!  Saving...")
 
     save_dict = {

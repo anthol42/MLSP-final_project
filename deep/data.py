@@ -469,6 +469,21 @@ class ImageDataset(Dataset):
     def __len__(self):
         return self.offsets[-2] + 1   # Last one is just padding to avoid overflow in indexing algorithm
 
+class PltDataset(Dataset):
+    def __init__(self, images: np.ndarray, labels: torch.Tensor):
+        super().__init__()
+        assert len(images) == len(labels), f"There must be the same number if images than labels. Got {len(images)} images and {len(labels)} labels"
+        self.data = images
+        self.labels = labels
+
+    def __getitem__(self, idx):
+        img, label = self.data[idx], self.labels[idx]
+        img = img.float() / 255
+        return img, label
+
+    def __len__(self):
+        return len(self.data)
+
 def split_data(data: Dict[str, pd.DataFrame], start: datetime, end: datetime) -> Dict[str, pd.DataFrame]:
     """
     Extract the date range from the data; range: [start,end]
@@ -481,6 +496,65 @@ def split_data(data: Dict[str, pd.DataFrame], start: datetime, end: datetime) ->
     for name, chart in data.items():
         out[name] = chart.loc[start.date():end.date()]
     return out
+
+def make_plt_dataloader(config, pipe: DataPipe, start, end, test_size: float = 0.2, val_size: float = 0.1,
+                    fract: float = 1.):
+    # Step 1: Fetch the data
+    data: Dict[str, pd.DataFrame] = pipe.get(start, end)
+    # Sample a fraction of the data if necessary
+    if fract < 1.:
+        tickers = sample_tickers(data, fract, seed=config["data"]["random_seed"])
+        data = {ticker: data[ticker] for ticker in tickers}
+
+    # Step 2: Make a temporary dataset
+    # This will generate and cache the plt figures as .cache/whole_plt_cache.npy
+    tmp_ds = ImageDataset(data, mode=config["data"]["mode"], p_quant=config["data"]["p_quant"],
+                            window_len=config["data"]["window_len"],
+                            space_between=config["data"]["space_between"],
+                            enlarge_factor=config["data"]["enlarge_factor"],
+                            interpolation_factor=config["data"]["interpolation_factor"],
+                            annotation_type='change',
+                            offset=config["data"]["offset"],
+                            plt_fig=True,
+                            name="whole",
+                            task='predictive',
+                            group_size=config["data"]["group_size"],
+                            ts=False
+                            )
+    labels = torch.empty(len(tmp_ds), dtype=torch.long)
+    h = tmp_ds.p_quant * tmp_ds.interpolation_factor
+    w = tmp_ds.interpolation_factor * (tmp_ds.window_len * tmp_ds.enlarge_factor + tmp_ds.space_between * (tmp_ds.window_len - 1))
+    images = torch.empty((len(tmp_ds), 3, h, w), dtype=torch.uint8)
+    for i, (img, label) in enumerate(tqdm(tmp_ds, desc="Acquiring labels")):
+        labels[i] = label
+        images[i] = img * 255
+
+    # Step 3: Split the data
+    indices = np.arange(len(images))
+    if config["data"]["random_seed"] is not None:
+        np.random.seed(config["data"]["random_seed"])
+    np.random.shuffle(indices)
+    train_end = int((1 - test_size - val_size) * len(images))
+    val_end = int((1-test_size) * len(images))
+
+    X_train, y_train = images[indices[:train_end]], labels[indices[:train_end]]
+    X_val, y_val = images[indices[train_end:val_end]], labels[indices[train_end:val_end]]
+    X_test, y_test = images[indices[val_end:]], labels[indices[val_end:]]
+
+    # Step 4: Make the real datasets
+    train_ds = PltDataset(X_train, y_train)
+    val_ds = PltDataset(X_val, y_val)
+    test_ds = PltDataset(X_test, y_test)
+
+    # Step 5: Initialize the dataloaders
+    train_dataloader = DataLoader(train_ds, batch_size=config["data"]["batch_size"], shuffle=config["data"]["shuffle"],
+                                  num_workers=config["data"]["num_workers"], persistent_workers=config["data"]["num_workers"] > 0)
+    val_dataloader = DataLoader(val_ds, batch_size=config["data"]["batch_size"], shuffle=False,
+                                  num_workers=config["data"]["num_workers"], persistent_workers=config["data"]["num_workers"] > 0)
+    test_dataloader = DataLoader(test_ds, batch_size=config["data"]["batch_size"], shuffle=False,
+                                  num_workers=config["data"]["num_workers"], persistent_workers=config["data"]["num_workers"] > 0)
+
+    return train_dataloader, val_dataloader, test_dataloader
 
 def make_dataloader(config, pipe: DataPipe, start: datetime, train_end: datetime, val_end: datetime, test_end: datetime,
                     fract: float = 1., annotation_type: str = "default", task: str = "predictive", ts: bool = False,
@@ -603,3 +677,4 @@ if __name__ == "__main__":
         #     plt.axis("off")
         #     plt.show()
         #     # plt.savefig("/Users/alavertu/Downloads/viz_repr_no_spectrum.png", dpi=400)
+# python main.py --experiment=experiment2 --config=configs/paper_2.yml --dataset="small" --config.data.plt_fig=True --sample_inputs --split="random" --watch=accuracy --debug
