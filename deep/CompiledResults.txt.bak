@@ -1,0 +1,38 @@
+                              Experiment                                    Hyperparameters          Configuration  accuracy  precision  crossEntropy   Status               Last Modified
+Category Run Id                                                                                                                                                                           
+         1       experiments.experiment1                               cpu:False, fract:1.0        configs/E_s.yml  0.601002   0.588940      0.886896  CREATED  2024-11-08 20:26:11.595033
+         2       experiments.experiment1                               cpu:False, fract:0.1        configs/E_s.yml  0.590376   0.585658      0.901660  CREATED  2024-11-10 11:51:32.359919
+         3       experiments.experiment1                               cpu:False, fract:0.1        configs/E_m.yml  0.598316   0.552634      0.887066  CREATED  2024-11-11 13:52:20.977199
+         4       experiments.experiment1                               cpu:False, fract:0.1        configs/C_s.yml  0.371832   0.185916      1.094200  CREATED  2024-11-12 16:47:22.396668
+         5       experiments.experiment1                               cpu:False, fract:0.1        configs/C_t.yml  0.371832   0.185916      1.093272  CREATED  2024-11-13 08:46:34.801265
+         6       experiments.experiment1                               cpu:False, fract:0.1       configs/V_16.yml  0.373696   0.186848      1.093082  CREATED  2024-11-14 07:10:52.446584
+         7       experiments.experiment1  comment:New training loop and data processing,...        configs/E_s.yml  0.595751   0.565942      0.890143  CREATED  2024-11-15 22:10:56.677439
+         8       experiments.experiment1  comment:New training loop and data processing,...        configs/E_s.yml  0.595996   0.554180      0.890694  CREATED  2024-11-17 11:25:33.294967
+         9       experiments.experiment2      dataset:small, cpu:False, noscaler:False, ...    configs/paper_2.yml  0.530109   0.482563      0.709141  CREATED  2024-11-19 12:31:31.387381
+         10      experiments.experiment2    dataset:small, comment:Fix eval, cpu:False, ...    configs/paper_2.yml  0.541070   0.399074      0.689390  CREATED  2024-11-19 18:11:53.199884
+         11      experiments.experiment2      dataset:small, cpu:False, noscaler:False, ...    configs/paper_2.yml  0.540527   0.442593      0.689496  CREATED  2024-11-19 18:28:05.077710
+         12      experiments.experiment2      dataset:small, cpu:False, noscaler:False, ...    configs/paper_2.yml  0.541427   0.508952      0.688769  CREATED  2024-11-19 19:10:34.632544
+         13      experiments.experiment2      dataset:small, cpu:False, noscaler:False, ...    configs/paper_2.yml  0.994358   0.999524      0.043019  CREATED  2024-11-19 19:24:06.907800
+         14      experiments.experiment2      dataset:small, cpu:False, noscaler:False, ...    configs/paper_2.yml  0.994412   0.999889      0.023687  CREATED  2024-11-19 19:37:00.641478
+         15      experiments.experiment2      dataset:small, cpu:False, noscaler:False, ...    configs/paper_2.yml  0.937681   0.987869      0.139072  CREATED  2024-11-19 19:51:26.988825
+         16      experiments.experiment2    dataset:smallUS, cpu:False, noscaler:False, ...    configs/paper_2.yml  0.536871   0.543730      0.691569  CREATED  2024-11-19 21:30:38.568031
+         17      experiments.experiment2    dataset:smallUS, cpu:False, noscaler:False, ...       configs/E_s2.yml  0.519873   0.543977      0.692258  CREATED  2024-11-19 23:02:59.564361
+         18      experiments.experiment2      dataset:small, cpu:False, noscaler:False, ...       configs/E_s2.yml  0.537300   0.390096      0.693771  CREATED  2024-11-20 00:16:24.193467
+         19      experiments.experiment2    dataset:smallUS, cpu:False, noscaler:False, ...       configs/E_s2.yml  0.519149   0.547367      0.693252  CREATED  2024-11-20 21:26:41.803157
+         20      experiments.experiment2       dataset:huge, cpu:False, noscaler:False, ...       configs/E_s2.yml  0.533260   0.518419      0.683402  CREATED  2024-11-21 07:24:32.850549
+         21      experiments.experiment2       dataset:huge, cpu:False, noscaler:False, ...    configs/paper_2.yml  0.532502   0.513260      0.684488  CREATED  2024-11-21 08:46:52.122120
+         22      experiments.experiment2   dataset:huge, cpu:False, sample_inputs:True, ...    configs/paper_2.yml  0.525011   0.517173      0.688017  CREATED  2024-11-21 10:14:42.960075
+         23      experiments.experiment2   dataset:huge, cpu:False, sample_inputs:True, ...    configs/paper_2.yml  0.530167   0.534426      0.690151  CREATED  2024-11-21 10:31:38.660206
+         24      experiments.experiment2   dataset:huge, cpu:False, sample_inputs:True, ...    configs/paper_2.yml  0.531945   0.538398      0.696573  CREATED  2024-11-21 10:40:04.204578
+         25      experiments.experiment2   dataset:huge, cpu:False, sample_inputs:True, ...    configs/paper_2.yml  0.526782   0.519840      0.687960  CREATED  2024-11-21 12:02:20.314815
+         26      experiments.experiment2   dataset:huge, cpu:False, sample_inputs:True, ...    configs/paper_2.yml  0.529687   0.531521      0.689999  CREATED  2024-11-21 13:20:43.250534
+         27      experiments.experiment2   dataset:huge, cpu:False, sample_inputs:True, ...    configs/paper_2.yml  0.541583   0.559228      0.687784  CREATED  2024-11-21 14:35:14.968758
+         28      experiments.experiment3  dataset:small, cpu:False, sample_inputs:False,...  configs/paper1D_2.yml  0.543004   0.537640      0.690425  CREATED  2024-11-24 09:50:50.063247
+         29      experiments.experiment3  dataset:huge, cpu:False, sample_inputs:False, ...  configs/paper1D_2.yml  0.521490   0.509678      0.686473  CREATED  2024-11-24 10:56:23.917766
+         30      experiments.experiment3  dataset:small, cpu:False, sample_inputs:False,...    configs/resLSTM.yml  0.540799   0.000000      0.690298  CREATED  2024-11-24 11:37:17.919832
+         31      experiments.experiment3   dataset:huge, cpu:False, sample_inputs:True, ...    configs/resLSTM.yml  0.518740   0.502782      0.688077  CREATED  2024-11-24 12:23:31.679095
+         32      experiments.experiment3   dataset:huge, cpu:False, sample_inputs:True, ...       configs/LSTM.yml  0.517477   0.506798      0.688315  CREATED  2024-11-24 13:57:19.688847
+         33      experiments.experiment2  dataset:small, cpu:False, sample_inputs:False,...    configs/paper_2.yml  0.571069   0.517258      0.677157  CREATED  2024-11-24 14:59:43.819607
+         34      experiments.experiment2  dataset:small, cpu:False, sample_inputs:True, ...       configs/V_32.yml  0.540744   0.305556      0.689712  CREATED  2024-11-24 15:30:42.723255
+         35      experiments.experiment2  dataset:small, cpu:False, sample_inputs:True, ...       configs/V_16.yml  0.540961   0.231481      0.690563  CREATED  2024-11-24 16:43:43.361867
+         36      experiments.experiment2  dataset:small, cpu:False, sample_inputs:True, ...    configs/paper_2.yml  0.562035   0.518403      0.680462  CREATED  2024-12-18 08:02:55.262092
